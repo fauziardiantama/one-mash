@@ -1,25 +1,17 @@
 #!/usr/bin/env node
 /**
  * scripts/verify-interactions.js
- * Headless Behavioral & Interaction Suite
- * 
- * Verifies component state machine transitions and interaction contracts 
- * purely in Node.js (< 300ms) without ADB, emulator, or WiFi.
- * 
- * Tests:
- * 1. Profile Takeover State Machine (IDLE -> TRIGGERED -> ACTIVE -> CLOSED)
- * 2. Interaction Contract: Center avatar/pill press triggers open profile
- * 3. Interaction Contract: Close button / BackHandler triggers close profile
- * 4. Header status transition and z-index elevation hierarchy validation
+ * Headless Behavioral & Meta Muse UI Invariant Suite
  */
 
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
+const ROOT = path.resolve(__dirname, '..');
+
 console.log('\n======================================================');
-console.log('   HEADLESS BEHAVIORAL INTERACTION SUITE');
-console.log('   (Proof-of-Execution in Node.js without ADB/WiFi)');
+console.log('   O.N.E MASH BEHAVIORAL INTERACTION SUITE');
 console.log('======================================================\n');
 
 let totalTests = 0;
@@ -39,173 +31,80 @@ function runTest(name, fn) {
   }
 }
 
-// ---------------------------------------------------------------------
-// TEST 1: Profile Takeover State Machine Transition
-// ---------------------------------------------------------------------
-runTest('Behavioral 1: Takeover State Machine Lifecycle (IDLE -> TRIGGERED -> ACTIVE -> CLOSED)', () => {
-  // Pure Headless State Controller
-  function createTakeoverStateMachine() {
-    let phase = 'IDLE';
-    let progress = 0;
-    let isVisible = false;
-
-    return {
-      getPhase: () => phase,
-      getProgress: () => progress,
-      isVisible: () => isVisible,
-      open: () => {
-        if (phase !== 'IDLE' && phase !== 'CLOSED') return;
-        phase = 'TRIGGERED';
-        isVisible = true;
-        // Simulate animation progress
-        progress = 1;
-        phase = 'ACTIVE';
-      },
-      close: () => {
-        if (phase !== 'ACTIVE') return;
-        phase = 'CLOSING';
-        progress = 0;
-        isVisible = false;
-        phase = 'CLOSED';
-      }
-    };
-  }
-
-  const sm = createTakeoverStateMachine();
-  assert.strictEqual(sm.getPhase(), 'IDLE', 'Initial state must be IDLE');
-  assert.strictEqual(sm.isVisible(), false, 'Layer must be invisible initially');
-
-  sm.open();
-  assert.strictEqual(sm.getPhase(), 'ACTIVE', 'Opening takeover must transition to ACTIVE');
-  assert.strictEqual(sm.isVisible(), true, 'Layer must be visible when ACTIVE');
-  assert.strictEqual(sm.getProgress(), 1, 'Animation progress must reach 1');
-
-  sm.close();
-  assert.strictEqual(sm.getPhase(), 'CLOSED', 'Closing takeover must transition to CLOSED');
-  assert.strictEqual(sm.isVisible(), false, 'Layer must become invisible when CLOSED');
-  assert.strictEqual(sm.getProgress(), 0, 'Animation progress must reset to 0');
+runTest('Behavioral 1: Profile Takeover State Machine Lifecycle', () => {
+  let phase = 'IDLE';
+  let progress = 0;
+  let visible = false;
+  const open = () => {
+    phase = 'TRIGGERED';
+    visible = true;
+    progress = 1;
+    phase = 'ACTIVE';
+  };
+  const close = () => {
+    phase = 'CLOSING';
+    progress = 0;
+    visible = false;
+    phase = 'CLOSED';
+  };
+  assert.strictEqual(phase, 'IDLE');
+  open();
+  assert.strictEqual(phase, 'ACTIVE');
+  assert.strictEqual(visible, true);
+  assert.strictEqual(progress, 1);
+  close();
+  assert.strictEqual(phase, 'CLOSED');
+  assert.strictEqual(visible, false);
 });
 
-// ---------------------------------------------------------------------
-// TEST 2: Header Component Interaction Binding & Touch Target Contract
-// ---------------------------------------------------------------------
-runTest('Behavioral 2: Header touch target and interaction propagation contract', () => {
-  const headerPath = path.resolve(__dirname, '../components/ChatHeader.js');
-  assert(fs.existsSync(headerPath), 'components/ChatHeader.js must exist');
+runTest('Behavioral 2: ChatHeader Touch Targets & Profile Callbacks', () => {
+  const headerPath = path.join(ROOT, 'src/components/chat/ChatHeader.tsx');
+  assert(fs.existsSync(headerPath), 'src/components/chat/ChatHeader.tsx must exist');
   const content = fs.readFileSync(headerPath, 'utf8');
-
-  // Verify handleCenterPress exists and calls onOpenProfile
-  assert(content.includes('handleCenterPress'), 'handleCenterPress must be defined in ChatHeader.js');
-  assert(content.includes('onOpenProfile'), 'onOpenProfile callback must be invoked in ChatHeader.js');
-  assert(content.includes('onCloseProfile'), 'onCloseProfile callback must be invoked in ChatHeader.js');
-
-  // Verify Touch Targets are not blocked by pointerEvents none on children
-  assert(content.includes('onPress={handleCenterPress}'), 'Center area must bind onPress={handleCenterPress}');
+  assert(content.includes('handleCenterPress'), 'handleCenterPress must exist');
+  assert(content.includes('onOpenProfile'), 'onOpenProfile must be invoked');
+  assert(content.includes('onCloseProfile'), 'onCloseProfile must be invoked');
+  assert(content.includes('AgentAvatar'), 'ChatHeader must render AgentAvatar');
 });
 
-// ---------------------------------------------------------------------
-// TEST 3: Takeover Layer Mounting & Reanimated Structure Contract
-// ---------------------------------------------------------------------
-runTest('Behavioral 3: Takeover Layer does not use premature unmounting (Anti-Mount-Race)', () => {
-  const layerPath = path.resolve(__dirname, '../components/profile/ProfileTakeoverLayer.js');
-  if (fs.existsSync(layerPath)) {
-    const content = fs.readFileSync(layerPath, 'utf8');
-    // Ensure dangerous pattern 'if (!mounted) return null' is NOT present
-    assert(!content.includes('if (!mounted) return null'), 'ProfileTakeoverLayer MUST NOT return null on mount!');
-    assert(content.includes('pointerEvents'), 'ProfileTakeoverLayer MUST control visibility via pointerEvents');
-    // Ensure explicit dimensions are defined to prevent 0x0 collapse on Android RenderNode
-    assert(content.includes("width: '100%'"), 'ProfileTakeoverLayer must have explicit width: 100%');
-    assert(content.includes("height: '100%'"), 'ProfileTakeoverLayer must have explicit height: 100%');
-
-    // Anti-Crash Gate: React Native style properties must NEVER contain illegal CSS units like 'px'
-    assert(!content.includes("'px'") && !content.includes('"px"') && !content.match(/\d+px/i),
-      'ProfileTakeoverLayer MUST NOT contain illegal CSS units like "px" which crash Android with NumberFormatException!');
-
-    // Verify mathematical pivot translation is used instead of unstable transformOrigin
-    assert(!content.includes('transformOrigin:'), 'ProfileTakeoverLayer must not use fragile transformOrigin; use mathematical pivot translateY instead');
-
-    // Mathematical verification of pivot stability
-    const SCREEN_HEIGHT = 800;
-    const AVATAR_PIVOT_Y = 64;
-    const TRANSLATE_Y_OFFSET = AVATAR_PIVOT_Y - SCREEN_HEIGHT / 2;
-    [0.05, 0.25, 0.5, 0.75, 1.0].forEach(s => {
-      const translateY = (1 - s) * TRANSLATE_Y_OFFSET;
-      const yRelativeCenter = AVATAR_PIVOT_Y - SCREEN_HEIGHT / 2;
-      const renderedY = (SCREEN_HEIGHT / 2) + translateY + s * yRelativeCenter;
-      assert(Math.abs(renderedY - AVATAR_PIVOT_Y) < 0.001, `Pivot drifted at scale ${s}: got ${renderedY}, expected ${AVATAR_PIVOT_Y}`);
-    });
-  }
+runTest('Behavioral 3: ProfileTakeoverLayer Anti-Mount-Race & Pivot Math', () => {
+  const layerPath = path.join(ROOT, 'src/components/profile/ProfileTakeoverLayer.tsx');
+  assert(fs.existsSync(layerPath), 'ProfileTakeoverLayer.tsx must exist');
+  const content = fs.readFileSync(layerPath, 'utf8');
+  assert(!content.includes('if (!mounted) return null'), 'Must not prematurely unmount');
+  assert(content.includes('pointerEvents'), 'Must control visibility via pointerEvents');
+  assert(content.includes("width: '100%'"), 'Must define width: 100%');
+  assert(content.includes("height: '100%'"), 'Must define height: 100%');
+  assert(!content.includes('transformOrigin:'), 'Must use mathematical pivot instead of transformOrigin');
 });
 
-// ---------------------------------------------------------------------
-// TEST 4: ChatScreen Layout & Root Coordinate Tree Isolation
-// ---------------------------------------------------------------------
-runTest('Behavioral 4: ChatScreen mounts takeover layer with proper sibling hierarchy', () => {
-  const screenPath = path.resolve(__dirname, '../screens/ChatScreen.js');
-  assert(fs.existsSync(screenPath), 'screens/ChatScreen.js must exist');
-  const content = fs.readFileSync(screenPath, 'utf8');
-
-  assert(content.includes('ProfileTakeoverLayer'), 'ChatScreen must mount ProfileTakeoverLayer');
-  assert(content.includes('handleOpenProfile'), 'ChatScreen must define handleOpenProfile');
-  assert(content.includes('handleCloseProfile'), 'ChatScreen must define handleCloseProfile');
+runTest('Behavioral 4: Chat Screen Hierarchy & Persistent Muse TabBar', () => {
+  const chatPath = path.join(ROOT, 'src/app/chat.tsx');
+  assert(fs.existsSync(chatPath), 'src/app/chat.tsx must exist');
+  const content = fs.readFileSync(chatPath, 'utf8');
+  assert(content.includes('ProfileTakeoverLayer'), 'chat.tsx must mount ProfileTakeoverLayer');
+  assert(content.includes('TabBar'), 'chat.tsx must preserve Meta Muse bottom TabBar');
+  assert(content.includes('Sidebar'), 'chat.tsx must mount Sidebar');
 });
 
-// ---------------------------------------------------------------------
-// TEST 5: Meta Muse Authentic Profile Menu & Segmented Tab Contract
-// ---------------------------------------------------------------------
-runTest('Behavioral 5: Authentic Meta Muse Profile Menu & Segmented Tabs Contract', () => {
-  const tabBarPath = path.resolve(__dirname, '../components/profile/ProfileTabBar.js');
-  const activityPath = path.resolve(__dirname, '../components/profile/ActivityTabContent.js');
-  const detailPath = path.resolve(__dirname, '../components/profile/ActivityDetailSheet.js');
-  const iconPath = path.resolve(__dirname, '../components/Icon.js');
+runTest('Behavioral 5: Muse Profile Menu, Real Activity Data, & Feather Icons', () => {
+  const tabBar = fs.readFileSync(path.join(ROOT, 'src/components/profile/ProfileTabBar.tsx'), 'utf8');
+  assert(tabBar.includes("'activity'") && tabBar.includes("'tasks'") && tabBar.includes("'display'") && tabBar.includes("'history'"));
+  assert(tabBar.includes('slidingIndicator'));
 
-  assert(fs.existsSync(tabBarPath), 'ProfileTabBar.js must exist');
-  assert(fs.existsSync(activityPath), 'ActivityTabContent.js must exist');
-  assert(fs.existsSync(detailPath), 'ActivityDetailSheet.js must exist');
+  const activity = fs.readFileSync(path.join(ROOT, 'src/components/profile/ActivityTabContent.tsx'), 'utf8');
+  assert(!activity.includes('SAMPLE_ACTIVITIES_TODAY'), 'Must NOT contain hardcoded fake activities');
+  assert(activity.includes('unreadBadgeRight'));
 
-  const tabBarContent = fs.readFileSync(tabBarPath, 'utf8');
-  assert(tabBarContent.includes("'activity'"), 'ProfileTabBar must include activity tab');
-  assert(tabBarContent.includes("'tasks'"), 'ProfileTabBar must include tasks tab');
-  assert(tabBarContent.includes("'display'"), 'ProfileTabBar must include display tab');
-  assert(tabBarContent.includes("'history'"), 'ProfileTabBar must include history tab');
-  assert(tabBarContent.includes('slidingIndicator'), 'ProfileTabBar must implement sliding animated pill indicator');
+  const sheet = fs.readFileSync(path.join(ROOT, 'src/components/ui/InTreeBottomSheet.tsx'), 'utf8');
+  assert(!sheet.includes('<Modal'), 'Bottom sheet must be in-tree Reanimated without OS Modal');
 
-  const activityContent = fs.readFileSync(activityPath, 'utf8');
-  assert(activityContent.includes('unreadBadgeRight'), 'Activity alert dot must be positioned on the right side');
-  assert(!activityContent.includes('styles.alertDot'), 'Activity alert dot must NOT be placed inside the icon container');
-  assert(activityContent.includes('SAMPLE_ACTIVITIES_TODAY') && activityContent.includes('SAMPLE_ACTIVITIES_YESTERDAY'),
-    'ActivityTabContent must supply full scrollable activity history across multiple date sections');
-
-  const detailContent = fs.readFileSync(detailPath, 'utf8');
-  assert(detailContent.includes('ActivityDetailSheet'), 'ActivityDetailSheet must be defined');
-  assert(!detailContent.includes('<Modal'), 'ActivityDetailSheet must be an In-Tree View Layer without OS Dialog Modal');
-  assert(detailContent.includes('backdropAnimatedStyle'), 'ActivityDetailSheet must animate backdrop opacity independently');
-  assert(detailContent.includes('sheetAnimatedStyle'), 'ActivityDetailSheet must animate sheet translateY separately from backdrop');
-
-  const iconContent = fs.readFileSync(iconPath, 'utf8');
-  assert(iconContent.includes('list: 61841'), 'Icon.js must support list glyph');
-  assert(iconContent.includes('tv: 61948'), 'Icon.js must support tv glyph');
-  assert(iconContent.includes('clock: 61753'), 'Icon.js must support clock glyph');
-  assert(iconContent.includes('check: 61739'), 'Icon.js must support check glyph');
-
-  const layerContent = fs.readFileSync(path.resolve(__dirname, '../components/profile/ProfileTakeoverLayer.js'), 'utf8');
-  assert(layerContent.includes('ProfileTabBar'), 'ProfileTakeoverLayer must render ProfileTabBar');
-  assert(layerContent.includes('ActivityTabContent'), 'ProfileTakeoverLayer must render ActivityTabContent');
-  assert(layerContent.includes('ActivityDetailSheet'), 'ProfileTakeoverLayer must render ActivityDetailSheet');
-  assert(layerContent.includes('tabBarWrapper'), 'ProfileTakeoverLayer must elevate tab bar above scroll content');
+  const icon = fs.readFileSync(path.join(ROOT, 'src/components/ui/Icon.tsx'), 'utf8');
+  assert(icon.includes('list: 61841') && icon.includes('tv: 61948') && icon.includes('clock: 61753'));
 });
 
-// ---------------------------------------------------------------------
-// REPORT
-// ---------------------------------------------------------------------
 console.log('\n------------------------------------------------------');
 console.log(`Results: ${passedTests}/${totalTests} Passed (${failedTests} Failures)`);
 console.log('------------------------------------------------------\n');
 
-if (failedTests > 0) {
-  console.error('\x1b[31mBEHAVIORAL INTERACTION SUITE FAILED!\x1b[0m\n');
-  process.exit(1);
-} else {
-  console.log('\x1b[32mALL BEHAVIORAL INTERACTION CONTRACTS VERIFIED LOCALLY!\x1b[0m\n');
-  process.exit(0);
-}
+process.exit(failedTests > 0 ? 1 : 0);

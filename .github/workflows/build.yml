@@ -108,7 +108,7 @@ jobs:
           find artifacts -type f -name "*.apk" -exec cp {} release_apks/ \;
           echo "Collected release APKs:"
           ls -lh release_apks/
-          gh release create "preview-${{ github.run_number }}" release_apks/*.apk \
-            --title "Preview build ${{ github.run_number }} (arm64-v8a & x86_64)" \
+          gh release create "onemash-build-${{ github.run_number }}" release_apks/*.apk \
+            --title "O.N.E Mash Build #${{ github.run_number }} (arm64-v8a & x86_64)" \
             --notes "Optimized Release APKs for arm64-v8a and x86_64 (stripped C++ symbols, ABI filtered) built by GitHub Actions." \
             --prerelease

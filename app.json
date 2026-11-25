@@ -1,14 +1,15 @@
 {
   "expo": {
-    "name": "muse-like-app",
-    "slug": "muse-like-app",
+    "name": "O.N.E Mash",
+    "slug": "one-mash",
+    "scheme": "onemash",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.farid.muselike"
+      "bundleIdentifier": "com.fafa.onemesh"
     },
     "android": {
       "adaptiveIcon": {
@@ -17,14 +18,16 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.farid.muselike",
+      "package": "com.fafa.onemesh",
       "windowSoftInputMode": "adjustNothing"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-router",
       "expo-font",
+      "expo-image-picker",
       "./plugins/with-adjust-nothing",
       "./plugins/with-font-assets",
       "./plugins/with-cleartext",
