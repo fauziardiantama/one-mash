@@ -2,6 +2,7 @@ import { apiRequest } from '../httpClient';
 
 export interface GroupRecord {
   id: string;
+  sessionId?: string;
   name: string;
   members: string[];
   createdAt?: number;

@@ -101,7 +101,7 @@ class OpenClawWsClient {
               id: 'gateway-client',
               version: '1.0.0',
               platform: 'android',
-              mode: 'mobile',
+              mode: 'backend',
             },
             role: 'operator',
             scopes: ['operator.admin', 'operator.read', 'operator.write'],

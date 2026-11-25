@@ -4,6 +4,28 @@ import type { AppStore, ChatMessage, ChatSlice, SessionSummary, ToolActivityItem
 
 let wsBound = false;
 
+export const MAIN_CHAT_SESSION_KEY = 'agent:main:main-chat';
+export const NOTIFICATION_HISTORY_SESSION_KEY = 'agent:main:notification-history';
+
+export function extractSessionIdSuffix(key: string): string {
+  const trimmed = key.trim();
+  if (!trimmed.toLowerCase().startsWith('agent:')) return trimmed;
+  const parts = trimmed.split(':');
+  return parts.length >= 3 ? parts.slice(2).join(':') : trimmed;
+}
+
+export function isHiddenSystemSessionKey(key: string): boolean {
+  const suffix = extractSessionIdSuffix(key).toLowerCase();
+  return (
+    suffix === 'main-chat' ||
+    suffix === 'main' ||
+    suffix === 'notification-history' ||
+    suffix === 'notifications' ||
+    suffix.startsWith('group-') ||
+    suffix.startsWith('group:')
+  );
+}
+
 interface OpenClawHistoryMsg {
   role?: string;
   content?: string | Array<{ type?: string; text?: string; name?: string; arguments?: unknown; [k: string]: unknown }>;
@@ -67,8 +89,8 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
   chat: {
     mode: 'direct',
     activeGroupId: null,
-    activeSessionKey: 'agent:main:main',
-    mainSessionKeys: { main: 'agent:main:main' },
+    activeSessionKey: MAIN_CHAT_SESSION_KEY,
+    mainSessionKeys: { main: MAIN_CHAT_SESSION_KEY },
     sessions: [],
     messages: [],
     toolActivities: [],
@@ -174,16 +196,23 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     openDirectChat: async (targetAgentId, explicitSessionKey) => {
       get().chat.initWsBindings();
       const agentId = (targetAgentId || get().agents.activeAgentId || 'main').trim();
-      const mainKey = get().chat.mainSessionKeys[agentId] || `agent:${agentId}:main`;
-      const sessionKey = explicitSessionKey || mainKey;
+      const defaultKey =
+        agentId === 'main'
+          ? MAIN_CHAT_SESSION_KEY
+          : get().chat.mainSessionKeys[agentId] || `agent:${agentId}:main`;
+      const sessionKey = explicitSessionKey || defaultKey;
 
       set((s) => ({
+        agents: {
+          ...s.agents,
+          activeAgentId: agentId,
+        },
         chat: {
           ...s.chat,
           mode: 'direct',
           activeGroupId: null,
           activeSessionKey: sessionKey,
-          mainSessionKeys: { ...s.chat.mainSessionKeys, [agentId]: mainKey },
+          mainSessionKeys: { ...s.chat.mainSessionKeys, [agentId]: defaultKey },
           loading: true,
           error: null,
         },
@@ -260,7 +289,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
         await openclawWs.connect();
         const res = await openclawWs.call<{
           sessions?: Array<{ key?: string; sessionKey?: string; updatedAt?: number; label?: string; displayName?: string }>;
-        }>('sessions.list', { limit: 50 });
+        }>('sessions.list', { limit: 100 });
 
         const raw = Array.isArray(res?.sessions) ? res.sessions : [];
         const sessions: SessionSummary[] = raw
@@ -268,10 +297,10 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
             const key = s.key || s.sessionKey || '';
             const parts = key.split(':');
             const agentId = parts[1] || 'main';
-            const title = s.displayName || s.label || parts.slice(2).join(':') || key;
+            const title = s.displayName || s.label || extractSessionIdSuffix(key) || key;
             return { key, agentId, title, updatedAt: s.updatedAt };
           })
-          .filter((s) => Boolean(s.key));
+          .filter((s) => Boolean(s.key) && !isHiddenSystemSessionKey(s.key));
 
         set((state) => ({
           chat: { ...state.chat, sessions },
@@ -292,6 +321,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
           toolActivities: [],
         },
       }));
+      await openclawWs.call('sessions.create', { key: newKey, agentId }).catch(() => {});
       await get().chat.openDirectChat(agentId, newKey);
       get().chat.loadSessions().catch(() => {});
     },
@@ -353,7 +383,8 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       }
 
       const agentId = state.agents.activeAgentId || 'main';
-      const sessionKey = state.chat.activeSessionKey || `agent:${agentId}:main`;
+      const defaultKey = agentId === 'main' ? MAIN_CHAT_SESSION_KEY : `agent:${agentId}:main`;
+      const sessionKey = state.chat.activeSessionKey || defaultKey;
       try {
         await openclawWs.connect();
         await openclawWs.call('sessions.messages.subscribe', { key: sessionKey, agentId }).catch(() => {});

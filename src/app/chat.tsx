@@ -58,8 +58,11 @@ export default function ChatScreen() {
 
   useEffect(() => {
     loadAgents().catch(() => {});
-    openDirectChat(activeAgentId).catch(() => {});
-  }, [activeAgentId, loadAgents, openDirectChat]);
+    const state = useStore.getState();
+    if (state.chat.mode === 'direct') {
+      openDirectChat(state.agents.activeAgentId, state.chat.activeSessionKey).catch(() => {});
+    }
+  }, [loadAgents, openDirectChat]);
 
   useEffect(() => {
     if (messages.length > 0) {
