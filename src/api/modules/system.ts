@@ -8,9 +8,17 @@ export interface HealthResponse {
 
 export interface OpenClawBootstrapStatus {
   configured: boolean;
+  gatewayConnected?: boolean;
   mainAgentExists?: boolean;
   mainAgentConfigured?: boolean;
-  details?: Record<string, unknown>;
+  details?: {
+    litellmProviderExists?: boolean;
+    hasAkashModel?: boolean;
+    hasModalModel?: boolean;
+    mainAgentExists?: boolean;
+    mainAgentConfigured?: boolean;
+    [key: string]: unknown;
+  };
 }
 
 export interface OpenClawBootstrapResult {

@@ -72,6 +72,7 @@ export default function ChatHeader({
             {isProfileOpen && (
               <TouchableOpacity
                 activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={styles.editBadge}
                 onPress={onEditAvatarPress}>
                 <Icon name="edit-2" size={12} color={COLORS.textPrimary} />

@@ -37,6 +37,9 @@ export default function ConnectionSettingsScreen() {
     }
   };
 
+  const isMainAgentReady =
+    bootstrapStatus?.details?.mainAgentConfigured ?? bootstrapStatus?.mainAgentConfigured;
+
   return (
     <ScreenShell>
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}>
@@ -63,7 +66,7 @@ export default function ConnectionSettingsScreen() {
             Konfigurasi Gateway: {bootstrapStatus?.configured ? 'Siap' : 'Belum terpasang'}
           </Text>
           <Text style={styles.statusText}>
-            Main Agent: {bootstrapStatus?.mainAgentConfigured ? 'Aktif (LiteLLM)' : 'Perlu sinkronisasi'}
+            Main Agent: {isMainAgentReady ? 'Aktif (LiteLLM)' : 'Perlu sinkronisasi'}
           </Text>
           <AppButton
             label="Jalankan Bootstrap OpenClaw"

@@ -21,6 +21,10 @@
       "package": "com.fafa.onemesh",
       "windowSoftInputMode": "adjustNothing"
     },
+    "androidNavigationBar": {
+      "backgroundColor": "#000000",
+      "barStyle": "light-content"
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     },

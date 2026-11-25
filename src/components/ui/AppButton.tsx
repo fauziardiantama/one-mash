@@ -78,6 +78,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 16,
     fontFamily: FONTS.bold,
+    textAlign: 'center',
   },
   labelDark: {
     color: COLORS.textDark,

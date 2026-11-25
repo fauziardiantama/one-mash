@@ -135,7 +135,7 @@ export default function ChatScreen() {
           : 'Offline';
 
   return (
-    <ScreenShell>
+    <ScreenShell safeBottom={false}>
       <View style={styles.root} {...sidebarPanResponder.panHandlers}>
         <Sidebar
           onSettingsPress={() => {
