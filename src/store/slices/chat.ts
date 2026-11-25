@@ -90,6 +90,9 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     mode: 'direct',
     activeGroupId: null,
     activeSessionKey: MAIN_CHAT_SESSION_KEY,
+    activeSessionModel: null,
+    activeSessionModelOverridden: false,
+    switchingModel: false,
     mainSessionKeys: { main: MAIN_CHAT_SESSION_KEY },
     sessions: [],
     messages: [],
@@ -202,6 +205,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
           : get().chat.mainSessionKeys[agentId] || `agent:${agentId}:main`;
       const sessionKey = explicitSessionKey || defaultKey;
 
+      const activeAgent = get().agents.list.find((a) => a.id === agentId);
       set((s) => ({
         agents: {
           ...s.agents,
@@ -212,6 +216,8 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
           mode: 'direct',
           activeGroupId: null,
           activeSessionKey: sessionKey,
+          activeSessionModel: activeAgent?.modelPrimary || null,
+          activeSessionModelOverridden: false,
           mainSessionKeys: { ...s.chat.mainSessionKeys, [agentId]: defaultKey },
           loading: true,
           error: null,
@@ -244,6 +250,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
             loading: false,
           },
         }));
+        get().chat.loadSessions().catch(() => {});
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Gagal memuat sesi OpenClaw';
         set((s) => ({
@@ -288,23 +295,57 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
         get().chat.initWsBindings();
         await openclawWs.connect();
         const res = await openclawWs.call<{
-          sessions?: Array<{ key?: string; sessionKey?: string; updatedAt?: number; label?: string; displayName?: string }>;
+          sessions?: Array<{
+            key?: string;
+            sessionKey?: string;
+            updatedAt?: number;
+            label?: string;
+            displayName?: string;
+            model?: string;
+            modelProvider?: string;
+            modelOverrideSource?: string | null;
+          }>;
         }>('sessions.list', { limit: 100 });
 
         const raw = Array.isArray(res?.sessions) ? res.sessions : [];
-        const sessions: SessionSummary[] = raw
+        const allParsed: SessionSummary[] = raw
           .map((s) => {
             const key = s.key || s.sessionKey || '';
             const parts = key.split(':');
             const agentId = parts[1] || 'main';
             const title = s.displayName || s.label || extractSessionIdSuffix(key) || key;
-            return { key, agentId, title, updatedAt: s.updatedAt };
+            return {
+              key,
+              agentId,
+              title,
+              updatedAt: s.updatedAt,
+              model: s.model,
+              modelProvider: s.modelProvider,
+              modelOverrideSource: s.modelOverrideSource,
+            };
           })
-          .filter((s) => Boolean(s.key) && !isHiddenSystemSessionKey(s.key));
+          .filter((s) => Boolean(s.key));
 
-        set((state) => ({
-          chat: { ...state.chat, sessions },
-        }));
+        const activeKey = get().chat.activeSessionKey;
+        const activeMeta = allParsed.find((s) => s.key === activeKey);
+        const sessions = allParsed.filter((s) => !isHiddenSystemSessionKey(s.key));
+
+        set((state) => {
+          const resolvedModel = activeMeta?.model
+            ? activeMeta.modelProvider
+              ? `${activeMeta.modelProvider}/${activeMeta.model}`
+              : activeMeta.model
+            : state.chat.activeSessionModel;
+          const overridden = activeMeta ? activeMeta.modelOverrideSource === 'user' : state.chat.activeSessionModelOverridden;
+          return {
+            chat: {
+              ...state.chat,
+              sessions,
+              activeSessionModel: resolvedModel,
+              activeSessionModelOverridden: overridden,
+            },
+          };
+        });
       } catch {}
     },
 
@@ -324,6 +365,56 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       await openclawWs.call('sessions.create', { key: newKey, agentId }).catch(() => {});
       await get().chat.openDirectChat(agentId, newKey);
       get().chat.loadSessions().catch(() => {});
+    },
+
+    setSessionModel: async (modelRef: string | null) => {
+      const state = get();
+      const sessionKey = state.chat.activeSessionKey;
+      const agentId = state.agents.activeAgentId || 'main';
+      set((s) => ({
+        chat: { ...s.chat, switchingModel: true, error: null },
+      }));
+      try {
+        await openclawWs.connect();
+        let patchRes: {
+          resolved?: { modelProvider?: string; model?: string };
+          entry?: { modelOverrideSource?: string };
+        };
+        try {
+          patchRes = await openclawWs.call('sessions.patch', {
+            key: sessionKey,
+            model: modelRef,
+          });
+        } catch {
+          await openclawWs.call('sessions.create', { key: sessionKey, agentId }).catch(() => {});
+          patchRes = await openclawWs.call('sessions.patch', {
+            key: sessionKey,
+            model: modelRef,
+          });
+        }
+
+        const prov = patchRes?.resolved?.modelProvider;
+        const mod = patchRes?.resolved?.model;
+        const nextModel = mod ? (prov ? `${prov}/${mod}` : mod) : modelRef;
+        const overridden =
+          modelRef !== null && (patchRes?.entry?.modelOverrideSource === 'user' || Boolean(modelRef));
+
+        set((s) => ({
+          chat: {
+            ...s.chat,
+            switchingModel: false,
+            activeSessionModel: nextModel,
+            activeSessionModelOverridden: overridden,
+          },
+        }));
+        get().chat.loadSessions().catch(() => {});
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Gagal mengubah model sesi';
+        set((s) => ({
+          chat: { ...s.chat, switchingModel: false, error: msg },
+        }));
+        throw err;
+      }
     },
 
     sendMessage: async (text, groupSpeaker) => {

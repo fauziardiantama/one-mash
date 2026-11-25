@@ -15,6 +15,7 @@ interface ChatHeaderProps {
   onOpenProfile?: () => void;
   onCloseProfile?: () => void;
   onEditAvatarPress?: () => void;
+  onMorePress?: () => void;
 }
 
 export default function ChatHeader({
@@ -25,17 +26,23 @@ export default function ChatHeader({
   onOpenProfile,
   onCloseProfile,
   onEditAvatarPress,
+  onMorePress,
 }: ChatHeaderProps) {
   const insets = useSafeAreaInsets();
   const activeAgentId = useStore((s) => s.agents.activeAgentId);
   const agentsList = useStore((s) => s.agents.list);
   const mode = useStore((s) => s.chat.mode);
   const activeGroupId = useStore((s) => s.chat.activeGroupId);
+  const activeSessionModel = useStore((s) => s.chat.activeSessionModel);
+  const activeSessionModelOverridden = useStore((s) => s.chat.activeSessionModelOverridden);
   const groupsList = useStore((s) => s.groups.list);
 
   const activeAgent = agentsList.find((a) => a.id === activeAgentId);
   const activeGroup = mode === 'group' ? groupsList.find((g) => g.id === activeGroupId) : null;
   const displayName = activeGroup ? activeGroup.name : activeAgent?.name || activeAgentId || 'Main Agent';
+  const modelLabel = activeGroup
+    ? `Multi-Agen (${activeGroup.members.length} anggota)`
+    : activeSessionModel || activeAgent?.modelPrimary || 'Belum terdeteksi';
 
   const handleCenterPress = () => {
     if (!isProfileOpen && onOpenProfile) {
@@ -84,6 +91,13 @@ export default function ChatHeader({
             <View style={styles.profileIdentityBlock}>
               <Text style={styles.profileName}>{displayName}</Text>
               <Text style={styles.profileStatus}>{status || 'online'}</Text>
+              <View style={styles.modelPill}>
+                <Icon name="cpu" size={12} color={COLORS.brandPinkSoft} style={styles.modelIcon} />
+                <Text style={styles.modelText} numberOfLines={1}>
+                  {modelLabel}
+                  {!activeGroup && activeSessionModelOverridden ? ' (sesi)' : ''}
+                </Text>
+              </View>
             </View>
           ) : (
             <View style={styles.namePill}>
@@ -94,7 +108,7 @@ export default function ChatHeader({
         </TouchableOpacity>
 
         {isProfileOpen ? (
-          <HeaderButton icon="more-horizontal" disabled onPress={() => {}} />
+          <HeaderButton icon="more-horizontal" disabled={mode === 'group'} onPress={onMorePress} />
         ) : (
           <View style={styles.sideSpacer} />
         )}
@@ -177,6 +191,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: FONTS.regular,
     marginTop: 2,
+  },
+  modelPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surfaceElevated,
+    borderRadius: RADII.pill,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 4,
+    marginTop: 6,
+    maxWidth: 240,
+  },
+  modelIcon: {
+    marginRight: 6,
+  },
+  modelText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontFamily: FONTS.medium,
   },
   sideSpacer: {
     width: LAYOUT.headerButtonSize,

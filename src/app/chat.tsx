@@ -22,6 +22,7 @@ import Sidebar, { SIDEBAR_WIDTH } from '../components/chat/Sidebar';
 import TabBar from '../components/chat/TabBar';
 import TypingIndicator from '../components/chat/TypingIndicator';
 import EditAvatarPopup from '../components/profile/EditAvatarPopup';
+import ModelPickerSheet from '../components/profile/ModelPickerSheet';
 import ProfileTakeoverLayer from '../components/profile/ProfileTakeoverLayer';
 import ScreenShell from '../components/ui/ScreenShell';
 import { BottomFade } from '../components/ui/TopFade';
@@ -34,6 +35,7 @@ export default function ChatScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [editPopupVisible, setEditPopupVisible] = useState(false);
+  const [modelSheetVisible, setModelSheetVisible] = useState(false);
   const [chatHeaderHeight, setChatHeaderHeight] = useState<number>(LAYOUT.headerDefaultHeight);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
@@ -230,10 +232,15 @@ export default function ChatScreen() {
             onOpenProfile={handleOpenProfile}
             onCloseProfile={handleCloseProfile}
             onEditAvatarPress={() => setEditPopupVisible(true)}
+            onMorePress={() => setModelSheetVisible(true)}
           />
           <EditAvatarPopup
             visible={editPopupVisible}
             onClose={() => setEditPopupVisible(false)}
+          />
+          <ModelPickerSheet
+            visible={modelSheetVisible}
+            onClose={() => setModelSheetVisible(false)}
           />
         </Animated.View>
       </View>

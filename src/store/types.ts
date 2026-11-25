@@ -40,12 +40,22 @@ export interface ToolActivityItem {
   statusLabel: string;
 }
 
+export interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  ref: string;
+  tags?: string[];
+}
+
 export interface AgentSummary {
   id: string;
   name: string;
   isCharacter?: boolean;
   description?: string;
   avatarVersion?: string;
+  modelPrimary?: string;
+  modelFallbacks?: string[];
 }
 
 export interface SessionSummary {
@@ -53,6 +63,9 @@ export interface SessionSummary {
   agentId: string;
   title: string;
   updatedAt?: number;
+  model?: string;
+  modelProvider?: string;
+  modelOverrideSource?: string | null;
 }
 
 export interface ConnectionSlice {
@@ -77,6 +90,7 @@ export interface ConnectionSlice {
 export interface AgentsSlice {
   agents: {
     list: AgentSummary[];
+    models: ModelOption[];
     characters: ImportedCharacterRecord[];
     profilePics: Record<string, ProfilePicMeta>;
     activeAgentId: string;
@@ -84,6 +98,7 @@ export interface AgentsSlice {
     uploading: boolean;
     error: string | null;
     loadAgents: () => Promise<void>;
+    loadModels: () => Promise<void>;
     selectAgent: (agentId: string) => void;
     uploadAvatar: (agentId: string, file: { uri: string; name?: string; mimeType?: string }) => Promise<void>;
     removeAvatar: (agentId: string) => Promise<void>;
@@ -99,6 +114,9 @@ export interface ChatSlice {
     mode: 'direct' | 'group';
     activeGroupId: string | null;
     activeSessionKey: string;
+    activeSessionModel: string | null;
+    activeSessionModelOverridden: boolean;
+    switchingModel: boolean;
     mainSessionKeys: Record<string, string>;
     sessions: SessionSummary[];
     messages: ChatMessage[];
@@ -114,6 +132,7 @@ export interface ChatSlice {
     openGroupChat: (groupId: string) => Promise<void>;
     loadSessions: () => Promise<void>;
     newDirectSession: () => Promise<void>;
+    setSessionModel: (modelRef: string | null) => Promise<void>;
     sendMessage: (text: string, groupSpeaker?: string) => Promise<void>;
     abortGeneration: () => Promise<void>;
     setReplyTo: (target: ReplyTarget | null) => void;
