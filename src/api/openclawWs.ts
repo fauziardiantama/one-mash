@@ -61,7 +61,11 @@ class OpenClawWsClient {
   }
 
   connect(): Promise<void> {
-    if (this.socket && this.status === 'connected' && this.readyPromise) {
+    if (
+      this.socket &&
+      (this.status === 'connected' || this.status === 'connecting') &&
+      this.readyPromise
+    ) {
       return this.readyPromise;
     }
 
