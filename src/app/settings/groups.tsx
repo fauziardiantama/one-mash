@@ -21,17 +21,42 @@ export default function GroupsSettingsScreen() {
   const groups = useStore((s) => s.groups.list);
   const loadGroups = useStore((s) => s.groups.loadGroups);
   const createGroup = useStore((s) => s.groups.createGroup);
+  const deleteGroup = useStore((s) => s.groups.deleteGroup);
   const agents = useStore((s) => s.agents.list);
+  const loadAgents = useStore((s) => s.agents.loadAgents);
+  const activeGroupId = useStore((s) => s.chat.activeGroupId);
   const openGroupChat = useStore((s) => s.chat.openGroupChat);
+  const openDirectChat = useStore((s) => s.chat.openDirectChat);
 
   useEffect(() => {
     loadGroups().catch(() => {});
-  }, [loadGroups]);
+    loadAgents().catch(() => {});
+  }, [loadGroups, loadAgents]);
 
   const toggleMember = (id: string) => {
     setSelectedMembers((prev) =>
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id],
     );
+  };
+
+  const handleConfirmDelete = (id: string, name: string) => {
+    Alert.alert('Hapus Grup', `Hapus grup "${name}" beserta riwayatnya?`, [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteGroup(id);
+            if (activeGroupId === id) {
+              openDirectChat('main').catch(() => {});
+            }
+          } catch (err: unknown) {
+            Alert.alert('Gagal Menghapus', err instanceof Error ? err.message : String(err));
+          }
+        },
+      },
+    ]);
   };
 
   const handleCreate = async () => {
@@ -80,6 +105,11 @@ export default function GroupsSettingsScreen() {
                 <Text style={styles.name}>{grp.name}</Text>
                 <Text style={styles.meta}>Anggota: {grp.members.join(', ')}</Text>
               </View>
+              <TouchableOpacity
+                style={styles.trashBtn}
+                onPress={() => handleConfirmDelete(grp.id, grp.name)}>
+                <Icon name="trash-2" size={18} color={COLORS.statusDangerAlt} />
+              </TouchableOpacity>
               <Icon name="chevron-right" size={20} color={COLORS.textMuted} />
             </TouchableOpacity>
           ))
@@ -101,20 +131,22 @@ export default function GroupsSettingsScreen() {
           onChangeText={setGroupName}
           placeholder="Diskusi Tim"
         />
-        <Text style={styles.memberHeader}>Pilih Anggota:</Text>
-        <View style={styles.chipWrap}>
-          {agents.map((ag) => {
-            const picked = selectedMembers.includes(ag.id);
-            return (
-              <TouchableOpacity
-                key={ag.id}
-                style={[styles.chip, picked && styles.chipActive]}
-                onPress={() => toggleMember(ag.id)}>
-                <Text style={[styles.chipText, picked && styles.chipTextActive]}>{ag.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <Text style={styles.memberHeader}>Pilih Anggota ({selectedMembers.length}):</Text>
+        <ScrollView style={styles.memberScroll} nestedScrollEnabled>
+          <View style={styles.chipWrap}>
+            {agents.map((ag) => {
+              const picked = selectedMembers.includes(ag.id);
+              return (
+                <TouchableOpacity
+                  key={ag.id}
+                  style={[styles.chip, picked && styles.chipActive]}
+                  onPress={() => toggleMember(ag.id)}>
+                  <Text style={[styles.chipText, picked && styles.chipTextActive]}>{ag.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
         <AppButton label="Buat & Buka Obrolan" variant="magenta" loading={creating} onPress={handleCreate} />
       </InTreeBottomSheet>
     </ScreenShell>
@@ -135,11 +167,13 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   infoCol: { flex: 1, marginLeft: SPACING.md },
+  trashBtn: { padding: SPACING.xs, marginRight: SPACING.xs },
   name: { color: COLORS.textPrimary, fontSize: 16, fontFamily: FONTS.bold },
   meta: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.regular, marginTop: 2 },
   sheetTitle: { color: COLORS.textPrimary, fontSize: 20, fontFamily: FONTS.bold, marginBottom: SPACING.md },
   memberHeader: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.bold, marginBottom: SPACING.sm },
-  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, marginBottom: SPACING.lg },
+  memberScroll: { maxHeight: 220, marginBottom: SPACING.lg },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   chip: {
     backgroundColor: COLORS.surfaceElevated,
     borderRadius: RADII.pill,

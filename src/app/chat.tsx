@@ -16,6 +16,7 @@ import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import ChatHeader from '../components/chat/ChatHeader';
 import Composer from '../components/chat/Composer';
+import GroupSpeakerBar from '../components/chat/GroupSpeakerBar';
 import { getGroupFlags } from '../components/chat/messageGrouping';
 import ReplyMessage from '../components/chat/ReplyMessage';
 import ScrollToBottomButton from '../components/chat/ScrollToBottomButton';
@@ -54,9 +55,15 @@ export default function ChatScreen() {
   const activeAgentId = useStore((s) => s.agents.activeAgentId);
   const agentsList = useStore((s) => s.agents.list);
   const loadAgents = useStore((s) => s.agents.loadAgents);
+  const mode = useStore((s) => s.chat.mode);
+  const activeGroupId = useStore((s) => s.chat.activeGroupId);
+  const activeGroupSpeaker = useStore((s) => s.chat.activeGroupSpeaker);
+  const groupsList = useStore((s) => s.groups.list);
+  const loadGroups = useStore((s) => s.groups.loadGroups);
 
   const activeAgent = agentsList.find((a) => a.id === activeAgentId);
-  const displayName = activeAgent?.name || activeAgentId || 'Main Agent';
+  const activeGroup = mode === 'group' ? groupsList.find((g) => g.id === activeGroupId) : null;
+  const displayName = activeGroup ? activeGroup.name : activeAgent?.name || activeAgentId || 'Main Agent';
 
   const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -64,6 +71,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     loadAgents().catch(() => {});
+    loadGroups().catch(() => {});
     const state = useStore.getState();
     if (state.chat.mode === 'direct') {
       openDirectChat(state.agents.activeAgentId, state.chat.activeSessionKey).catch(() => {});
@@ -79,7 +87,7 @@ export default function ChatScreen() {
       }
     });
     return () => sub.remove();
-  }, [loadAgents, openDirectChat, openGroupChat]);
+  }, [loadAgents, loadGroups, openDirectChat, openGroupChat]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -214,10 +222,11 @@ export default function ChatScreen() {
               />
             </View>
             <ErrorMessage message={chatError} />
+            <GroupSpeakerBar />
             <Composer
               isStreaming={isStreaming}
               onSend={(text) => {
-                sendMessage(text);
+                sendMessage(text, mode === 'group' ? activeGroupSpeaker ?? undefined : undefined);
                 setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
               }}
               onAbort={abortGeneration}

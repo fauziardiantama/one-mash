@@ -259,6 +259,7 @@ export interface ChatSlice {
   chat: {
     mode: 'direct' | 'group';
     activeGroupId: string | null;
+    activeGroupSpeaker: string | null;
     activeSessionKey: string;
     activeSessionModel: string | null;
     activeSessionModelOverridden: boolean;
@@ -276,6 +277,7 @@ export interface ChatSlice {
     initWsBindings: () => void;
     openDirectChat: (agentId?: string, sessionKey?: string) => Promise<void>;
     openGroupChat: (groupId: string) => Promise<void>;
+    setGroupSpeaker: (agentId: string) => void;
     loadSessions: () => Promise<void>;
     newDirectSession: () => Promise<void>;
     setSessionModel: (modelRef: string | null) => Promise<void>;
@@ -316,6 +318,7 @@ export interface GroupsSlice {
     error: string | null;
     loadGroups: () => Promise<void>;
     createGroup: (name: string, members: string[]) => Promise<GroupRecord>;
+    deleteGroup: (id: string) => Promise<void>;
   };
 }
 

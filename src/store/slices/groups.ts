@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { createGroup as apiCreateGroup, listGroups } from '../../api';
+import { createGroup as apiCreateGroup, deleteGroup as apiDeleteGroup, listGroups } from '../../api';
 import type { AppStore, GroupsSlice } from '../types';
 
 export const createGroupsSlice: StateCreator<AppStore, [], [], GroupsSlice> = (set) => ({
@@ -26,6 +26,13 @@ export const createGroupsSlice: StateCreator<AppStore, [], [], GroupsSlice> = (s
         groups: { ...s.groups, list: [created, ...s.groups.list] },
       }));
       return created;
+    },
+
+    deleteGroup: async (id) => {
+      await apiDeleteGroup(id);
+      set((s) => ({
+        groups: { ...s.groups, list: s.groups.list.filter((g) => g.id !== id) },
+      }));
     },
   },
 });

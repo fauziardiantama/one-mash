@@ -59,13 +59,15 @@ export default function Sidebar({ onSettingsPress, onSelectChat }: SidebarProps)
   const activeSessionKey = useStore((s) => s.chat.activeSessionKey);
   const sessions = useStore((s) => s.chat.sessions);
   const loadSessions = useStore((s) => s.chat.loadSessions);
+  const loadGroups = useStore((s) => s.groups.loadGroups);
   const openDirectChat = useStore((s) => s.chat.openDirectChat);
   const openGroupChat = useStore((s) => s.chat.openGroupChat);
   const newDirectSession = useStore((s) => s.chat.newDirectSession);
 
   useEffect(() => {
     loadSessions().catch(() => {});
-  }, [loadSessions]);
+    loadGroups().catch(() => {});
+  }, [loadSessions, loadGroups]);
 
   const activeAgent = agentsList.find((a) => a.id === activeAgentId);
   const agentNameById = new Map(agentsList.map((a) => [a.id, a.name]));

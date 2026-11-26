@@ -1,5 +1,5 @@
 import { StateCreator } from 'zustand';
-import { getGroup, openclawWs, postGroupMessage, type GroupMessageItem, type OpenClawChatEvent } from '../../api';
+import { abortGroupTurn, getGroup, openclawWs, postGroupMessage, type GroupMessageItem, type OpenClawChatEvent } from '../../api';
 import type { AppStore, ChatMessage, ChatSlice, SessionSummary, ToolActivityItem } from '../types';
 
 let wsBound = false;
@@ -227,6 +227,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     chat: {
     mode: 'direct',
     activeGroupId: null,
+    activeGroupSpeaker: null,
     activeSessionKey: MAIN_CHAT_SESSION_KEY,
     activeSessionModel: null,
     activeSessionModelOverridden: false,
@@ -419,15 +420,21 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
         const detail = await getGroup(groupId);
         const messages = mapGroupHistory(groupId, detail?.history || []);
         const pending = Boolean(detail?.pendingTurn?.active);
-        set((s) => ({
-          chat: {
-            ...s.chat,
-            messages,
-            loading: false,
-            isStreaming: pending,
-            error: !pending && detail?.pendingTurn?.error ? detail.pendingTurn.error : null,
-          },
-        }));
+        const members = Array.isArray(detail?.members) ? detail.members : [];
+        set((s) => {
+          const curSpeaker = s.chat.activeGroupSpeaker;
+          const nextSpeaker = curSpeaker && members.includes(curSpeaker) ? curSpeaker : members[0] || 'main';
+          return {
+            chat: {
+              ...s.chat,
+              activeGroupSpeaker: nextSpeaker,
+              messages,
+              loading: false,
+              isStreaming: pending,
+              error: !pending && detail?.pendingTurn?.error ? detail.pendingTurn.error : null,
+            },
+          };
+        });
         if (pending) {
           scheduleGroupPoll(groupId);
         }
@@ -438,6 +445,11 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
         }));
       }
     },
+
+    setGroupSpeaker: (agentId: string) =>
+      set((s) => ({
+        chat: { ...s.chat, activeGroupSpeaker: agentId },
+      })),
 
     loadSessions: async () => {
       try {
@@ -595,7 +607,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       if (state.chat.mode === 'group' && state.chat.activeGroupId) {
         const groupId = state.chat.activeGroupId;
         const group = state.groups.list.find((g) => g.id === groupId);
-        const speaker = groupSpeaker || group?.members?.[0] || 'main';
+        const speaker = groupSpeaker || state.chat.activeGroupSpeaker || group?.members?.[0] || 'main';
         try {
           const res = await postGroupMessage(groupId, outboundText, speaker);
           if (res.reply !== undefined) {
@@ -657,8 +669,16 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     },
 
     abortGeneration: async () => {
+      const { mode, activeGroupId, activeSessionKey, activeRunId } = get().chat;
+      if (mode === 'group' && activeGroupId) {
+        stopGroupPoll();
+        await abortGroupTurn(activeGroupId).catch(() => {});
+        set((s) => ({
+          chat: { ...s.chat, isStreaming: false, activeRunId: null },
+        }));
+        return;
+      }
       stopDirectSync();
-      const { activeSessionKey, activeRunId } = get().chat;
       try {
         await openclawWs.call('chat.abort', {
           sessionKey: activeSessionKey,

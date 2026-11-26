@@ -62,3 +62,15 @@ export function postGroupMessage(
     timeoutMs: 15_000,
   });
 }
+
+export function deleteGroup(id: string): Promise<{ deleted: boolean; id: string }> {
+  return apiRequest(`/groups/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function abortGroupTurn(id: string): Promise<{ aborted: boolean }> {
+  return apiRequest(`/groups/${encodeURIComponent(id)}/abort`, {
+    method: 'POST',
+  });
+}
