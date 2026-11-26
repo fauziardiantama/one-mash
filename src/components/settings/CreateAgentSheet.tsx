@@ -42,10 +42,10 @@ export default function CreateAgentSheet({
 
   return (
     <InTreeBottomSheet visible={visible} onClose={onClose}>
-      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Buat Agen OpenClaw Baru</Text>
-        <Text style={styles.sub}>Agen standar OpenClaw lengkap dengan workspace & dokumen otomatis.</Text>
+      <Text style={styles.title}>Buat Agen OpenClaw Baru</Text>
+      <Text style={styles.sub}>Agen standar OpenClaw lengkap dengan workspace & dokumen otomatis.</Text>
 
+      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <AppInput
           label="Nama Agen"
           placeholder="Contoh: Research Assistant"
@@ -90,25 +90,25 @@ export default function CreateAgentSheet({
             );
           })}
         </ScrollView>
-
-        <View style={styles.actions}>
-          <AppButton label="Batal" variant="secondary" onPress={onClose} style={styles.btnFlex} />
-          <AppButton
-            label="Buat Agen"
-            variant="magenta"
-            loading={loading}
-            disabled={!name.trim()}
-            onPress={handleSubmit}
-            style={styles.btnFlex}
-          />
-        </View>
       </ScrollView>
+
+      <View style={styles.actions}>
+        <AppButton label="Batal" variant="secondary" onPress={onClose} style={styles.btnFlex} />
+        <AppButton
+          label="Buat Agen"
+          variant="magenta"
+          loading={loading}
+          disabled={!name.trim()}
+          onPress={handleSubmit}
+          style={styles.btnFlex}
+        />
+      </View>
     </InTreeBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { maxHeight: 520 },
+  scroll: { maxHeight: 330 },
   title: { color: COLORS.textPrimary, fontSize: 18, fontFamily: FONTS.bold, marginBottom: 4 },
   sub: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular, marginBottom: SPACING.lg },
   label: {
