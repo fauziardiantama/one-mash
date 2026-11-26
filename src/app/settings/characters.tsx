@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { ParsedCardPreview } from '../../api';
+import CreateAgentSheet from '../../components/settings/CreateAgentSheet';
 import AgentAvatar from '../../components/ui/AgentAvatar';
 import AppButton from '../../components/ui/AppButton';
 import FloatingHeader from '../../components/ui/FloatingHeader';
@@ -17,15 +18,19 @@ export default function CharactersSettingsScreen() {
   const [headerHeight, setHeaderHeight] = useState<number>(LAYOUT.headerDefaultHeight);
   const [pickedFile, setPickedFile] = useState<{ uri: string; name?: string; mimeType?: string } | null>(null);
   const [preview, setPreview] = useState<ParsedCardPreview | null>(null);
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
 
   const agentsList = useStore((s) => s.agents.list);
+  const models = useStore((s) => s.agents.models);
   const loading = useStore((s) => s.agents.loading);
   const uploading = useStore((s) => s.agents.uploading);
+  const savingConfig = useStore((s) => s.agents.savingConfig);
   const loadAgents = useStore((s) => s.agents.loadAgents);
   const selectAgent = useStore((s) => s.agents.selectAgent);
+  const createAgent = useStore((s) => s.agents.createAgent);
   const parseCard = useStore((s) => s.agents.parseCard);
   const importCard = useStore((s) => s.agents.importCard);
-  const removeCharacter = useStore((s) => s.agents.removeCharacter);
+  const deleteAgent = useStore((s) => s.agents.deleteAgent);
 
   useEffect(() => {
     loadAgents().catch(() => {});
@@ -73,31 +78,44 @@ export default function CharactersSettingsScreen() {
     }
   };
 
-  const handleConfirmDelete = (agentId: string, name: string) => {
-    Alert.alert('Hapus Karakter', `Hapus agen karakter "${name}" (@${agentId}) beserta filenya?`, [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Hapus',
-        style: 'destructive',
-        onPress: () => {
-          removeCharacter(agentId).catch((err) => {
-            Alert.alert('Gagal Menghapus', err instanceof Error ? err.message : String(err));
-          });
+  const handleConfirmDelete = (agentId: string, name: string, isCharacter?: boolean) => {
+    Alert.alert(
+      isCharacter ? 'Hapus Karakter' : 'Hapus Agen',
+      `Hapus agen "${name}" (@${agentId}) beserta filenya?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: () => {
+            deleteAgent(agentId).catch((err) => {
+              Alert.alert('Gagal Menghapus', err instanceof Error ? err.message : String(err));
+            });
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (
     <ScreenShell>
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}>
-        <AppButton
-          label="Impor Character Card v2 (.png / .json)"
-          variant="magenta"
-          loading={uploading}
-          onPress={handlePickCard}
-          style={styles.importBtn}
-        />
+        <View style={styles.topBtns}>
+          <AppButton
+            label="Buat Agen"
+            variant="secondary"
+            loading={savingConfig}
+            onPress={() => setShowCreateSheet(true)}
+            style={styles.halfBtn}
+          />
+          <AppButton
+            label="Impor Card v2"
+            variant="magenta"
+            loading={uploading}
+            onPress={handlePickCard}
+            style={styles.halfBtn}
+          />
+        </View>
 
         <Text style={styles.sectionLabel}>SEMUA AGEN OPENCLAW ({sortedAgents.length})</Text>
 
@@ -149,10 +167,10 @@ export default function CharactersSettingsScreen() {
                 }}>
                 <Icon name="message-circle" size={18} color={COLORS.textPrimary} />
               </TouchableOpacity>
-              {agent.isCharacter && agent.id !== 'main' ? (
+              {agent.id !== 'main' ? (
                 <TouchableOpacity
                   style={styles.iconBtn}
-                  onPress={() => handleConfirmDelete(agent.id, agent.name)}>
+                  onPress={() => handleConfirmDelete(agent.id, agent.name, agent.isCharacter)}>
                   <Icon name="trash-2" size={18} color={COLORS.statusDangerAlt} />
                 </TouchableOpacity>
               ) : (
@@ -199,6 +217,22 @@ export default function CharactersSettingsScreen() {
           </View>
         ) : null}
       </InTreeBottomSheet>
+
+      <CreateAgentSheet
+        visible={showCreateSheet}
+        models={models}
+        loading={savingConfig}
+        onClose={() => setShowCreateSheet(false)}
+        onCreate={async (input) => {
+          try {
+            const newId = await createAgent(input);
+            setShowCreateSheet(false);
+            router.push({ pathname: '/settings/agent-detail', params: { agentId: newId } });
+          } catch (err: unknown) {
+            Alert.alert('Gagal Membuat Agen', err instanceof Error ? err.message : String(err));
+          }
+        }}
+      />
     </ScreenShell>
   );
 }
@@ -206,7 +240,8 @@ export default function CharactersSettingsScreen() {
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxxl },
-  importBtn: { marginBottom: SPACING.lg },
+  topBtns: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
+  halfBtn: { flex: 1 },
   sectionLabel: {
     color: COLORS.textMuted,
     fontSize: 12,

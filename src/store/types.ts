@@ -48,11 +48,92 @@ export interface ModelOption {
   tags?: string[];
 }
 
+export interface ToolCatalogItem {
+  id: string;
+  label: string;
+  description?: string;
+  rawDescription?: string;
+  source?: string;
+  defaultProfiles?: string[];
+}
+
+export interface ToolCatalogGroup {
+  id: string;
+  label: string;
+  source?: string;
+  tools: ToolCatalogItem[];
+}
+
+export interface ToolProfileOption {
+  id: string;
+  label: string;
+}
+
+export interface AgentEffectiveTools {
+  profile: string;
+  groups: ToolCatalogGroup[];
+}
+
+export interface AgentToolsCatalog {
+  profiles: ToolProfileOption[];
+  groups: ToolCatalogGroup[];
+}
+
+export interface AgentSkillItem {
+  name: string;
+  skillKey?: string;
+  description?: string;
+  source?: string;
+  emoji?: string;
+  eligible: boolean;
+  disabled: boolean;
+  blockedByAllowlist?: boolean;
+  missing?: {
+    bins?: string[];
+    anyBins?: string[];
+    env?: string[];
+    config?: string[];
+    os?: string[];
+  };
+}
+
+export interface AgentConfigUpdateInput {
+  name?: string;
+  description?: string | null;
+  emoji?: string | null;
+  workspace?: string | null;
+  modelPrimary?: string | null;
+  modelFallbacks?: string[];
+  thinkingDefault?: string | null;
+  verboseDefault?: string | null;
+  reasoningDefault?: string | null;
+  typingMode?: string | null;
+  subagentsAllow?: string[];
+  subagentsDelegationMode?: string | null;
+  heartbeatEvery?: string | null;
+}
+
+export interface AgentToolsPolicyInput {
+  profile?: string | null;
+  allow?: string[] | null;
+  alsoAllow?: string[] | null;
+  deny?: string[] | null;
+}
+
+export interface CreateOpenClawAgentInput {
+  name: string;
+  model?: string;
+  workspace?: string;
+  emoji?: string;
+  avatar?: string;
+}
+
 export interface AgentSummary {
   id: string;
   name: string;
   isCharacter?: boolean;
   description?: string;
+  emoji?: string;
   avatarVersion?: string;
   modelPrimary?: string;
   modelFallbacks?: string[];
@@ -60,6 +141,11 @@ export interface AgentSummary {
   workspaceGit?: boolean;
   thinkingDefault?: string;
   thinkingOptions?: string[];
+  verboseDefault?: string;
+  reasoningDefault?: string;
+  fastModeDefault?: string | boolean;
+  typingMode?: string;
+  heartbeatEvery?: string;
   defaultPermissionMode?: string;
   runtimeId?: string;
   createdVia?: string;
@@ -82,9 +168,22 @@ export interface AgentWorkspaceFile {
 export interface AgentDetailData {
   agentId: string;
   summary: AgentSummary;
-  toolsAllow: string[];
+  toolsProfile?: string;
+  toolsAllow: string[] | null;
+  toolsAlsoAllow: string[];
   toolsDeny: string[];
+  skillsFilter: string[] | null;
   subagentsAllow: string[];
+  subagentsDelegationMode?: string;
+  heartbeatEvery?: string;
+  verboseDefault?: string;
+  reasoningDefault?: string;
+  fastModeDefault?: string | boolean;
+  typingMode?: string;
+  effectiveTools: AgentEffectiveTools | null;
+  toolsCatalog: AgentToolsCatalog | null;
+  skills: AgentSkillItem[];
+  sessions: SessionSummary[];
   files: AgentWorkspaceFile[];
   profilePicMeta: ProfilePicMeta | null;
   characterMeta: ImportedCharacterRecord | null;
@@ -131,12 +230,20 @@ export interface AgentsSlice {
     loading: boolean;
     detailLoading: boolean;
     fileLoading: boolean;
+    savingConfig: boolean;
+    savingFile: boolean;
     uploading: boolean;
     error: string | null;
     loadAgents: () => Promise<void>;
     loadModels: () => Promise<void>;
     loadAgentDetail: (agentId: string) => Promise<AgentDetailData>;
     loadAgentFile: (agentId: string, fileName: string) => Promise<AgentWorkspaceFile | null>;
+    saveAgentFile: (agentId: string, fileName: string, content: string) => Promise<AgentWorkspaceFile | null>;
+    createAgent: (input: CreateOpenClawAgentInput) => Promise<string>;
+    updateAgentConfig: (agentId: string, patch: AgentConfigUpdateInput) => Promise<void>;
+    updateAgentToolsPolicy: (agentId: string, policy: AgentToolsPolicyInput) => Promise<void>;
+    updateAgentSkillsFilter: (agentId: string, skillsFilter: string[] | null) => Promise<void>;
+    deleteAgent: (agentId: string) => Promise<void>;
     selectAgent: (agentId: string) => void;
     uploadAvatar: (agentId: string, file: { uri: string; name?: string; mimeType?: string }) => Promise<void>;
     removeAvatar: (agentId: string) => Promise<void>;
