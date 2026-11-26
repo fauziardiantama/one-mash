@@ -56,6 +56,39 @@ export interface AgentSummary {
   avatarVersion?: string;
   modelPrimary?: string;
   modelFallbacks?: string[];
+  workspace?: string;
+  workspaceGit?: boolean;
+  thinkingDefault?: string;
+  thinkingOptions?: string[];
+  defaultPermissionMode?: string;
+  runtimeId?: string;
+  createdVia?: string;
+  createdAt?: number;
+  identityName?: string;
+  creator?: string | null;
+  characterVersion?: string | null;
+}
+
+export interface AgentWorkspaceFile {
+  name: string;
+  path?: string;
+  missing?: boolean;
+  size?: number;
+  updatedAtMs?: number;
+  hash?: string;
+  content?: string;
+}
+
+export interface AgentDetailData {
+  agentId: string;
+  summary: AgentSummary;
+  toolsAllow: string[];
+  toolsDeny: string[];
+  subagentsAllow: string[];
+  files: AgentWorkspaceFile[];
+  profilePicMeta: ProfilePicMeta | null;
+  characterMeta: ImportedCharacterRecord | null;
+  loadedAt: number;
 }
 
 export interface SessionSummary {
@@ -93,12 +126,17 @@ export interface AgentsSlice {
     models: ModelOption[];
     characters: ImportedCharacterRecord[];
     profilePics: Record<string, ProfilePicMeta>;
+    details: Record<string, AgentDetailData>;
     activeAgentId: string;
     loading: boolean;
+    detailLoading: boolean;
+    fileLoading: boolean;
     uploading: boolean;
     error: string | null;
     loadAgents: () => Promise<void>;
     loadModels: () => Promise<void>;
+    loadAgentDetail: (agentId: string) => Promise<AgentDetailData>;
+    loadAgentFile: (agentId: string, fileName: string) => Promise<AgentWorkspaceFile | null>;
     selectAgent: (agentId: string) => void;
     uploadAvatar: (agentId: string, file: { uri: string; name?: string; mimeType?: string }) => Promise<void>;
     removeAvatar: (agentId: string) => Promise<void>;

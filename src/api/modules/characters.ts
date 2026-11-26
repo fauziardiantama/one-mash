@@ -4,6 +4,11 @@ export interface ImportedCharacterRecord {
   agentId: string;
   characterName: string;
   cardSha256?: string;
+  spec?: string;
+  creator?: string | null;
+  characterVersion?: string | null;
+  hasProfilePic?: boolean;
+  profilePicUrl?: string | null;
   createdAt?: number;
   avatarUrl?: string;
   description?: string;
@@ -13,13 +18,35 @@ export interface ImportedCharacterRecord {
 
 export interface ParsedCardPreview {
   name: string;
+  agentId?: string;
   description?: string;
   personality?: string;
   scenario?: string;
   first_mes?: string;
   system_prompt?: string;
+  creator?: string;
+  characterVersion?: string;
   hasEmbeddedAvatar?: boolean;
+  hasEmbeddedImage?: boolean;
   spec?: string;
+  specVersion?: string;
+  duplicate?: {
+    isDuplicate?: boolean;
+    reason?: string;
+    existingAgentId?: string;
+  };
+  card?: {
+    data?: {
+      name?: string;
+      description?: string;
+      personality?: string;
+      scenario?: string;
+      first_mes?: string;
+      system_prompt?: string;
+      creator?: string;
+      character_version?: string;
+    };
+  };
   [key: string]: unknown;
 }
 
@@ -47,12 +74,25 @@ function makeCardFormData(file: { uri: string; name?: string; mimeType?: string 
   return fd;
 }
 
-export function parseCharacterCard(file: {
+export async function parseCharacterCard(file: {
   uri: string;
   name?: string;
   mimeType?: string;
 }): Promise<ParsedCardPreview> {
-  return apiUploadMultipart<ParsedCardPreview>('/characters/parse', makeCardFormData(file));
+  const raw = await apiUploadMultipart<ParsedCardPreview>('/characters/parse', makeCardFormData(file));
+  const data = raw?.card?.data;
+  return {
+    ...raw,
+    name: raw.name || data?.name || raw.agentId || 'Karakter Baru',
+    description: raw.description ?? data?.description,
+    personality: raw.personality ?? data?.personality,
+    scenario: raw.scenario ?? data?.scenario,
+    first_mes: raw.first_mes ?? data?.first_mes,
+    system_prompt: raw.system_prompt ?? data?.system_prompt,
+    creator: raw.creator ?? data?.creator,
+    characterVersion: raw.characterVersion ?? data?.character_version,
+    hasEmbeddedAvatar: raw.hasEmbeddedAvatar ?? raw.hasEmbeddedImage,
+  };
 }
 
 export function importCharacterCard(file: {

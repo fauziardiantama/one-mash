@@ -13,6 +13,10 @@ export function listProfilePics(): Promise<{ profilePics: ProfilePicMeta[] }> {
   return apiRequest<{ profilePics: ProfilePicMeta[] }>('/agents/profile-pics');
 }
 
+export function getProfilePicMeta(agentId: string): Promise<ProfilePicMeta> {
+  return apiRequest<ProfilePicMeta>(`/agents/${encodeURIComponent(agentId)}/profile-pic/meta`);
+}
+
 export function buildProfilePicUrl(agentId: string, versionTag?: string): string {
   const base = getApiBaseUrl();
   const q = versionTag ? `?v=${encodeURIComponent(versionTag)}` : '';

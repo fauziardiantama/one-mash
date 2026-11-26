@@ -12,7 +12,7 @@ export default function SettingsScreen() {
   const [headerHeight, setHeaderHeight] = useState<number>(LAYOUT.headerDefaultHeight);
   const baseUrl = useStore((s) => s.connection.baseUrl);
   const sleep = useStore((s) => s.notifications.config.notification_sleep);
-  const charCount = useStore((s) => s.agents.characters.length);
+  const agentCount = useStore((s) => s.agents.list.length);
   const groupCount = useStore((s) => s.groups.list.length);
 
   return (
@@ -35,8 +35,9 @@ export default function SettingsScreen() {
           />
           <GroupedRow
             icon="shield"
-            label="Karakter & Kartu v2"
-            valueText={charCount > 0 ? String(charCount) : undefined}
+            label="Agents & Characters"
+            subtitle="Semua agen OpenClaw & Kartu v2"
+            valueText={agentCount > 0 ? String(agentCount) : undefined}
             onPress={() => router.push('/settings/characters')}
           />
           <GroupedRow
