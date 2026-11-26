@@ -10,39 +10,59 @@ export interface AkashApiKeyRecord {
   createdAt?: number;
 }
 
+export interface ProviderOperationState {
+  state: 'idle' | 'running' | 'failed';
+  action?: string | null;
+  phase?: string | null;
+  startedAt?: number | null;
+  updatedAt?: number | null;
+  error?: string | null;
+}
+
 export interface AkashStatus {
   deployed?: boolean;
+  active?: boolean;
+  state?: string;
   dseq?: string | null;
   url?: string | null;
+  endpoints?: string[];
   modelName?: string;
   activeKey?: { id: string; email: string; balanceUsd?: number | null } | null;
+  operation?: ProviderOperationState;
   [key: string]: unknown;
 }
 
 export interface ModalStatus {
   deployed?: boolean;
   active?: boolean;
+  state?: string;
   url?: string | null;
   modelName?: string;
+  operation?: ProviderOperationState;
   [key: string]: unknown;
 }
 
-export function getAkashStatus(): Promise<AkashStatus> {
-  return apiRequest<AkashStatus>('/provider/akash');
+export async function getAkashStatus(): Promise<AkashStatus> {
+  const status = await apiRequest<AkashStatus>('/provider/akash');
+  return {
+    ...status,
+    url: status.url ?? status.endpoints?.[0] ?? null,
+  };
 }
 
 export function deployAkash(name?: string, maxWaitSec?: number): Promise<unknown> {
-  return apiRequest('/provider/akash/deploy', {
+  return apiRequest('/provider/akash/deploy?async=1', {
     method: 'POST',
-    body: { name, maxWaitSec },
-    timeoutMs: 120_000,
+    body: { name, maxWaitSec, async: true },
+    timeoutMs: 15_000,
   });
 }
 
 export function stopAkash(dseq?: string): Promise<unknown> {
-  return apiRequest('/provider/akash/stop', {
+  return apiRequest('/provider/akash/stop?async=1', {
     method: 'POST',
-    body: dseq ? { dseq } : {},
+    body: { ...(dseq ? { dseq } : {}), async: true },
+    timeoutMs: 15_000,
   });
 }
 
@@ -100,17 +120,33 @@ export function getModalStatus(): Promise<ModalStatus> {
 }
 
 export function deployModal(): Promise<unknown> {
-  return apiRequest('/provider/modal/deploy', { method: 'POST', timeoutMs: 120_000 });
+  return apiRequest('/provider/modal/deploy?async=1', {
+    method: 'POST',
+    body: { async: true },
+    timeoutMs: 15_000,
+  });
 }
 
 export function activateModal(): Promise<unknown> {
-  return apiRequest('/provider/modal/activate', { method: 'POST', timeoutMs: 600_000 });
+  return apiRequest('/provider/modal/activate?async=1', {
+    method: 'POST',
+    body: { async: true },
+    timeoutMs: 15_000,
+  });
 }
 
 export function deactivateModal(): Promise<unknown> {
-  return apiRequest('/provider/modal/deactivate', { method: 'POST' });
+  return apiRequest('/provider/modal/deactivate?async=1', {
+    method: 'POST',
+    body: { async: true },
+    timeoutMs: 15_000,
+  });
 }
 
 export function undeployModal(): Promise<unknown> {
-  return apiRequest('/provider/modal/undeploy', { method: 'POST' });
+  return apiRequest('/provider/modal/undeploy?async=1', {
+    method: 'POST',
+    body: { async: true },
+    timeoutMs: 15_000,
+  });
 }

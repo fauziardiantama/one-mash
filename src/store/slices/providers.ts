@@ -18,148 +18,126 @@ import {
 } from '../../api';
 import type { AppStore, ProvidersSlice } from '../types';
 
-export const createProvidersSlice: StateCreator<AppStore, [], [], ProvidersSlice> = (set, get) => ({
-  providers: {
-    akash: null,
-    akashKeys: [],
-    akashYaml: '',
-    modal: null,
-    loading: false,
-    error: null,
+let providerPollTimer: ReturnType<typeof setTimeout> | null = null;
 
-    loadProviders: async () => {
-      set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
-      try {
-        const [akashRes, keysRes, modalRes] = await Promise.allSettled([
-          getAkashStatus(),
-          listAkashKeys(),
-          getModalStatus(),
-        ]);
+function clearProviderPollTimer(): void {
+  if (providerPollTimer) {
+    clearTimeout(providerPollTimer);
+    providerPollTimer = null;
+  }
+}
 
-        const rawKeys = keysRes.status === 'fulfilled' ? keysRes.value : [];
-        const akashKeys = Array.isArray(rawKeys)
-          ? rawKeys
-          : Array.isArray(rawKeys?.keys)
-            ? rawKeys.keys
-            : [];
+export const createProvidersSlice: StateCreator<AppStore, [], [], ProvidersSlice> = (set, get) => {
+  const schedulePollIfNeeded = () => {
+    const { akash, modal } = get().providers;
+    const isRunning = akash?.operation?.state === 'running' || modal?.operation?.state === 'running';
+    if (!isRunning) {
+      clearProviderPollTimer();
+      return;
+    }
+    if (providerPollTimer) return;
+    providerPollTimer = setTimeout(() => {
+      providerPollTimer = null;
+      get().providers.loadProviders().catch(() => {});
+    }, 2500);
+  };
 
-        set((s) => ({
-          providers: {
-            ...s.providers,
-            akash: akashRes.status === 'fulfilled' ? akashRes.value : s.providers.akash,
-            akashKeys,
-            modal: modalRes.status === 'fulfilled' ? modalRes.value : s.providers.modal,
-            loading: false,
-          },
-        }));
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Gagal memuat status provider';
-        set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
-      }
-    },
-
-    deployAkash: async (name) => {
-      set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
-      try {
-        await deployAkash(name);
-        await get().providers.loadProviders();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Deploy Akash gagal';
-        set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
-        throw err;
-      }
-    },
-
-    stopAkash: async () => {
-      set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
-      try {
-        await stopAkash();
-        await get().providers.loadProviders();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Gagal menghentikan Akash';
-        set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
-        throw err;
-      }
-    },
-
-    addAkashKey: async (email, key) => {
-      await addAkashKey(email, key);
+  const runAction = async (fn: () => Promise<unknown>, fallbackErr: string) => {
+    set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
+    try {
+      await fn();
       await get().providers.loadProviders();
-    },
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : fallbackErr;
+      set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
+      throw err;
+    }
+  };
 
-    updateAkashKey: async (id, patch) => {
-      await updateAkashKey(id, patch);
-      await get().providers.loadProviders();
-    },
+  return {
+    providers: {
+      akash: null,
+      akashKeys: [],
+      akashYaml: '',
+      modal: null,
+      loading: false,
+      error: null,
 
-    rotateAkashKey: async (deadKeyId) => {
-      await rotateAkashKey(deadKeyId);
-      await get().providers.loadProviders();
-    },
+      loadProviders: async () => {
+        set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
+        try {
+          const [akashRes, keysRes, modalRes] = await Promise.allSettled([
+            getAkashStatus(),
+            listAkashKeys(),
+            getModalStatus(),
+          ]);
 
-    deleteAkashKey: async (identifier) => {
-      await deleteAkashKey(identifier);
-      await get().providers.loadProviders();
-    },
+          const rawKeys = keysRes.status === 'fulfilled' ? keysRes.value : [];
+          const akashKeys = Array.isArray(rawKeys)
+            ? rawKeys
+            : Array.isArray(rawKeys?.keys)
+              ? rawKeys.keys
+              : [];
 
-    loadAkashYaml: async () => {
-      const res = await getAkashYaml();
-      const yaml = res?.content ?? res?.yaml ?? '';
-      set((s) => ({ providers: { ...s.providers, akashYaml: yaml } }));
-      return yaml;
-    },
+          set((s) => ({
+            providers: {
+              ...s.providers,
+              akash: akashRes.status === 'fulfilled' ? akashRes.value : s.providers.akash,
+              akashKeys,
+              modal: modalRes.status === 'fulfilled' ? modalRes.value : s.providers.modal,
+              loading: false,
+            },
+          }));
+          schedulePollIfNeeded();
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Gagal memuat status provider';
+          set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
+        }
+      },
 
-    saveAkashYaml: async (content) => {
-      await saveAkashYaml(content);
-      set((s) => ({ providers: { ...s.providers, akashYaml: content } }));
-    },
+      deployAkash: (name) => runAction(() => deployAkash(name), 'Deploy Akash gagal'),
 
-    deployModal: async () => {
-      set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
-      try {
-        await deployModal();
+      stopAkash: () => runAction(() => stopAkash(), 'Gagal menghentikan Akash'),
+
+      addAkashKey: async (email, key) => {
+        await addAkashKey(email, key);
         await get().providers.loadProviders();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Deploy Modal gagal';
-        set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
-        throw err;
-      }
-    },
+      },
 
-    activateModal: async () => {
-      set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
-      try {
-        await activateModal();
+      updateAkashKey: async (id, patch) => {
+        await updateAkashKey(id, patch);
         await get().providers.loadProviders();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Aktivasi Modal gagal';
-        set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
-        throw err;
-      }
-    },
+      },
 
-    deactivateModal: async () => {
-      set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
-      try {
-        await deactivateModal();
+      rotateAkashKey: async (deadKeyId) => {
+        await rotateAkashKey(deadKeyId);
         await get().providers.loadProviders();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Deaktivasi Modal gagal';
-        set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
-        throw err;
-      }
-    },
+      },
 
-    undeployModal: async () => {
-      set((s) => ({ providers: { ...s.providers, loading: true, error: null } }));
-      try {
-        await undeployModal();
+      deleteAkashKey: async (identifier) => {
+        await deleteAkashKey(identifier);
         await get().providers.loadProviders();
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Undeploy Modal gagal';
-        set((s) => ({ providers: { ...s.providers, loading: false, error: msg } }));
-        throw err;
-      }
+      },
+
+      loadAkashYaml: async () => {
+        const res = await getAkashYaml();
+        const yaml = res?.content ?? res?.yaml ?? '';
+        set((s) => ({ providers: { ...s.providers, akashYaml: yaml } }));
+        return yaml;
+      },
+
+      saveAkashYaml: async (content) => {
+        await saveAkashYaml(content);
+        set((s) => ({ providers: { ...s.providers, akashYaml: content } }));
+      },
+
+      deployModal: () => runAction(() => deployModal(), 'Deploy Modal gagal'),
+
+      activateModal: () => runAction(() => activateModal(), 'Aktivasi Modal gagal'),
+
+      deactivateModal: () => runAction(() => deactivateModal(), 'Deaktivasi Modal gagal'),
+
+      undeployModal: () => runAction(() => undeployModal(), 'Undeploy Modal gagal'),
     },
-  },
-});
+  };
+};

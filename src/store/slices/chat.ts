@@ -1,8 +1,26 @@
 import { StateCreator } from 'zustand';
-import { getGroup, openclawWs, postGroupMessage, type OpenClawChatEvent } from '../../api';
+import { getGroup, openclawWs, postGroupMessage, type GroupMessageItem, type OpenClawChatEvent } from '../../api';
 import type { AppStore, ChatMessage, ChatSlice, SessionSummary, ToolActivityItem } from '../types';
 
 let wsBound = false;
+let groupPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+function stopGroupPoll(): void {
+  if (groupPollTimer) {
+    clearTimeout(groupPollTimer);
+    groupPollTimer = null;
+  }
+}
+
+function mapGroupHistory(groupId: string, history: GroupMessageItem[] = []): ChatMessage[] {
+  return history.map((h, i) => ({
+    id: `grp-${groupId}-${i}`,
+    role: h.speaker === 'user' ? 'user' : 'ai',
+    author: h.speaker === 'user' ? 'Anda' : h.speaker,
+    text: h.text || '',
+    createdAt: h.ts || h.createdAt,
+  }));
+}
 
 export const MAIN_CHAT_SESSION_KEY = 'agent:main:main-chat';
 export const NOTIFICATION_HISTORY_SESSION_KEY = 'agent:main:notification-history';
@@ -85,8 +103,54 @@ function makeUuid(): string {
   });
 }
 
-export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, get) => ({
-  chat: {
+export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, get) => {
+  const scheduleGroupPoll = (groupId: string, attemptsLeft = 90) => {
+    stopGroupPoll();
+    if (attemptsLeft <= 0) {
+      set((s) => ({
+        chat: {
+          ...s.chat,
+          isStreaming: false,
+          error: 'Waktu tunggu balasan agen grup habis, coba muat ulang grup.',
+        },
+      }));
+      return;
+    }
+
+    groupPollTimer = setTimeout(async () => {
+      groupPollTimer = null;
+      const cur = get().chat;
+      if (cur.mode !== 'group' || cur.activeGroupId !== groupId) return;
+
+      try {
+        const detail = await getGroup(groupId);
+        const latest = get().chat;
+        if (latest.mode !== 'group' || latest.activeGroupId !== groupId) return;
+
+        const mapped = mapGroupHistory(groupId, detail.history || []);
+        const stillRunning = Boolean(detail.pendingTurn?.active);
+        const turnError = detail.pendingTurn?.error || null;
+
+        set((s) => ({
+          chat: {
+            ...s.chat,
+            messages: mapped,
+            isStreaming: stillRunning,
+            error: !stillRunning && turnError ? turnError : s.chat.error,
+          },
+        }));
+
+        if (stillRunning) {
+          scheduleGroupPoll(groupId, attemptsLeft - 1);
+        }
+      } catch {
+        scheduleGroupPoll(groupId, attemptsLeft - 1);
+      }
+    }, 2000);
+  };
+
+  return {
+    chat: {
     mode: 'direct',
     activeGroupId: null,
     activeSessionKey: MAIN_CHAT_SESSION_KEY,
@@ -197,6 +261,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     },
 
     openDirectChat: async (targetAgentId, explicitSessionKey) => {
+      stopGroupPoll();
       get().chat.initWsBindings();
       const agentId = (targetAgentId || get().agents.activeAgentId || 'main').trim();
       const defaultKey =
@@ -260,32 +325,37 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     },
 
     openGroupChat: async (groupId: string) => {
+      stopGroupPoll();
       set((s) => ({
         chat: {
           ...s.chat,
           mode: 'group',
           activeGroupId: groupId,
           loading: true,
+          isStreaming: false,
           error: null,
         },
       }));
       try {
         const detail = await getGroup(groupId);
-        const history = Array.isArray(detail?.history) ? detail.history : [];
-        const messages: ChatMessage[] = history.map((h, i) => ({
-          id: `grp-${groupId}-${i}`,
-          role: h.speaker === 'user' ? 'user' : 'ai',
-          author: h.speaker === 'user' ? 'Anda' : h.speaker,
-          text: h.text || '',
-          createdAt: h.ts || h.createdAt,
-        }));
+        const messages = mapGroupHistory(groupId, detail?.history || []);
+        const pending = Boolean(detail?.pendingTurn?.active);
         set((s) => ({
-          chat: { ...s.chat, messages, loading: false },
+          chat: {
+            ...s.chat,
+            messages,
+            loading: false,
+            isStreaming: pending,
+            error: !pending && detail?.pendingTurn?.error ? detail.pendingTurn.error : null,
+          },
         }));
+        if (pending) {
+          scheduleGroupPoll(groupId);
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Gagal memuat percakapan grup';
         set((s) => ({
-          chat: { ...s.chat, loading: false, error: msg },
+          chat: { ...s.chat, loading: false, isStreaming: false, error: msg },
         }));
       }
     },
@@ -444,26 +514,31 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       }));
 
       if (state.chat.mode === 'group' && state.chat.activeGroupId) {
-        const group = state.groups.list.find((g) => g.id === state.chat.activeGroupId);
+        const groupId = state.chat.activeGroupId;
+        const group = state.groups.list.find((g) => g.id === groupId);
         const speaker = groupSpeaker || group?.members?.[0] || 'main';
         try {
-          const res = await postGroupMessage(state.chat.activeGroupId, outboundText, speaker);
-          set((s) => ({
-            chat: {
-              ...s.chat,
-              isStreaming: false,
-              messages: [
-                ...s.chat.messages,
-                {
-                  id: `grp-ai-${Date.now()}`,
-                  role: 'ai',
-                  author: res.speaker,
-                  text: res.reply,
-                  createdAt: Date.now(),
-                },
-              ],
-            },
-          }));
+          const res = await postGroupMessage(groupId, outboundText, speaker);
+          if (res.reply !== undefined) {
+            set((s) => ({
+              chat: {
+                ...s.chat,
+                isStreaming: false,
+                messages: [
+                  ...s.chat.messages,
+                  {
+                    id: `grp-ai-${Date.now()}`,
+                    role: 'ai',
+                    author: res.speaker,
+                    text: res.reply as string,
+                    createdAt: Date.now(),
+                  },
+                ],
+              },
+            }));
+          } else {
+            scheduleGroupPoll(groupId);
+          }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Gagal mengirim pesan grup';
           set((s) => ({
@@ -512,4 +587,5 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       }));
     },
   },
-});
+  };
+};

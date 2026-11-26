@@ -20,6 +20,11 @@ export default function AkashPanel() {
   const [apiKey, setApiKey] = useState('');
   const [adding, setAdding] = useState(false);
 
+  const op = akash?.operation;
+  const opRunning = op?.state === 'running';
+  const isBusy = loading || opRunning;
+  const resolvedUrl = akash?.url || akash?.endpoints?.[0] || null;
+
   const handleAddKey = async () => {
     if (!email.trim() || !apiKey.trim()) {
       Alert.alert('Input Kurang', 'Email dan Akash API key wajib diisi.');
@@ -42,19 +47,30 @@ export default function AkashPanel() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Status Akash Deployment</Text>
         <Text style={styles.metaText}>
-          Status: {akash?.deployed ? 'Deployed' : 'Idle'} • DSEQ: {akash?.dseq || '-'}
+          Status: {opRunning ? 'Processing...' : akash?.deployed ? 'Deployed' : 'Idle'} • DSEQ: {akash?.dseq || '-'}
         </Text>
         <Text style={styles.metaText}>
           Active Key: {akash?.activeKey?.email || 'Tidak ada'}
           {akash?.activeKey?.balanceUsd != null ? ` ($${akash.activeKey.balanceUsd.toFixed(3)})` : ''}
         </Text>
-        {akash?.url ? <Text style={styles.urlText}>{akash.url}</Text> : null}
+        {resolvedUrl ? <Text style={styles.urlText}>{resolvedUrl}</Text> : null}
+        {opRunning && op?.phase ? (
+          <View style={styles.infoBanner}>
+            <Text style={styles.infoBannerText}>{op.phase}</Text>
+          </View>
+        ) : null}
+        {op?.state === 'failed' && op.error ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{op.error}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.btnRow}>
           <AppButton
             label={akash?.deployed ? 'Redeploy' : 'Deploy'}
             variant="magenta"
-            loading={loading}
+            loading={opRunning && op?.action === 'deploy'}
+            disabled={isBusy}
             onPress={() => deployAkash().catch((e) => Alert.alert('Deploy Gagal', String(e?.message || e)))}
             style={styles.flexBtn}
           />
@@ -62,7 +78,8 @@ export default function AkashPanel() {
             <AppButton
               label="Stop"
               variant="danger"
-              loading={loading}
+              loading={opRunning && op?.action === 'undeploy'}
+              disabled={isBusy}
               onPress={() => stopAkash().catch((e) => Alert.alert('Stop Gagal', String(e?.message || e)))}
               style={styles.flexBtn}
             />
@@ -121,6 +138,20 @@ const styles = StyleSheet.create({
   cardTitle: { color: COLORS.textPrimary, fontSize: 16, fontFamily: FONTS.bold, marginBottom: SPACING.sm },
   metaText: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular, marginBottom: 4 },
   urlText: { color: COLORS.statusInfo, fontSize: 12, fontFamily: FONTS.mono, marginTop: 4 },
+  infoBanner: {
+    backgroundColor: COLORS.brandBlueTint,
+    borderRadius: RADII.md,
+    padding: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  infoBannerText: { color: COLORS.statusInfo, fontSize: 12, fontFamily: FONTS.medium },
+  errorBanner: {
+    backgroundColor: COLORS.statusDangerBg,
+    borderRadius: RADII.md,
+    padding: SPACING.sm,
+    marginTop: SPACING.sm,
+  },
+  errorBannerText: { color: COLORS.statusDanger, fontSize: 12, fontFamily: FONTS.medium },
   btnRow: { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md },
   flexBtn: { flex: 1 },
   keyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm },

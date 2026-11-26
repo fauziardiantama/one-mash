@@ -45,9 +45,10 @@ export function updateNotificationConfig(patch: {
 }
 
 export function flushNotifications(includeHeld = true): Promise<unknown> {
-  return apiRequest('/notifications/flush', {
+  return apiRequest('/notifications/flush?async=1', {
     method: 'POST',
-    body: { includeHeld },
+    body: { includeHeld, async: true },
+    timeoutMs: 15_000,
   });
 }
 

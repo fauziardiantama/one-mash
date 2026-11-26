@@ -27,23 +27,38 @@ export interface GroupMessageItem {
   ts?: number;
 }
 
+export interface GroupPendingTurnState {
+  active: boolean;
+  speaker?: string | null;
+  startedAt?: number | null;
+  error?: string | null;
+}
+
 export interface GroupDetailRecord extends GroupRecord {
   mode?: string;
   history?: GroupMessageItem[];
+  pendingTurn?: GroupPendingTurnState;
 }
 
 export function getGroup(id: string): Promise<GroupDetailRecord> {
   return apiRequest<GroupDetailRecord>(`/groups/${encodeURIComponent(id)}`);
 }
 
+export interface PostGroupMessageResponse {
+  accepted?: boolean;
+  speaker: string;
+  reply?: string;
+  pendingTurn?: GroupPendingTurnState;
+}
+
 export function postGroupMessage(
   id: string,
   text: string,
   speaker: string,
-): Promise<{ speaker: string; reply: string }> {
-  return apiRequest(`/groups/${encodeURIComponent(id)}/messages`, {
+): Promise<PostGroupMessageResponse> {
+  return apiRequest(`/groups/${encodeURIComponent(id)}/messages?async=1`, {
     method: 'POST',
-    body: { text, speaker },
-    timeoutMs: 90_000,
+    body: { text, speaker, async: true },
+    timeoutMs: 15_000,
   });
 }
