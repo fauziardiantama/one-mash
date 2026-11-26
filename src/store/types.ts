@@ -72,6 +72,7 @@ export interface ToolProfileOption {
 export interface AgentEffectiveTools {
   profile: string;
   groups: ToolCatalogGroup[];
+  estimated?: boolean;
 }
 
 export interface AgentToolsCatalog {

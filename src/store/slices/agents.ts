@@ -126,6 +126,32 @@ async function patchAgentConfigEntry(agentId: string, entryPatch: Record<string,
   });
 }
 
+function estimateEffectiveTools(
+  catalog: AgentToolsCatalog | null,
+  toolsCfg?: OpenClawAgentEntryConfig['tools'],
+): AgentEffectiveTools | null {
+  if (!catalog) return null;
+  const profile = toolsCfg?.profile || 'full';
+  const allowSet = Array.isArray(toolsCfg?.allow) ? new Set(toolsCfg.allow) : null;
+  const alsoSet = new Set(Array.isArray(toolsCfg?.alsoAllow) ? toolsCfg.alsoAllow : []);
+  const denySet = new Set(Array.isArray(toolsCfg?.deny) ? toolsCfg.deny : []);
+
+  const groups = catalog.groups
+    .map((g) => ({
+      ...g,
+      tools: g.tools.filter((t) => {
+        if (denySet.has(t.id)) return false;
+        if (allowSet !== null) return allowSet.has(t.id);
+        if (alsoSet.has(t.id)) return true;
+        if (profile === 'full') return true;
+        return Array.isArray(t.defaultProfiles) && t.defaultProfiles.includes(profile);
+      }),
+    }))
+    .filter((g) => g.tools.length > 0);
+
+  return { profile, groups, estimated: true };
+}
+
 export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (set, get) => ({
   agents: {
     list: [{ id: 'main', name: 'Main Agent' }],
@@ -337,16 +363,22 @@ export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (s
                 }))
             : [];
 
-        const effectiveSessionKey =
-          agentSessions[0]?.key || (agentId === 'main' ? 'agent:main:main-chat' : `agent:${agentId}:main`);
+        const toolsCatalog = catalogRes.status === 'fulfilled' ? catalogRes.value : null;
+        const liveSessionKey =
+          agentSessions[0]?.key || (agentId === 'main' ? 'agent:main:main-chat' : undefined);
         let effectiveTools: AgentEffectiveTools | null = null;
-        try {
-          effectiveTools = await openclawWs.call<AgentEffectiveTools>('tools.effective', {
-            agentId,
-            sessionKey: effectiveSessionKey,
-          });
-        } catch {
-          effectiveTools = null;
+        if (liveSessionKey) {
+          try {
+            effectiveTools = await openclawWs.call<AgentEffectiveTools>('tools.effective', {
+              agentId,
+              sessionKey: liveSessionKey,
+            });
+          } catch {
+            effectiveTools = null;
+          }
+        }
+        if (!effectiveTools) {
+          effectiveTools = estimateEffectiveTools(toolsCatalog, entry?.tools);
         }
 
         const filesMap = new Map<string, AgentWorkspaceFile>();
@@ -439,7 +471,7 @@ export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (s
           fastModeDefault: entry?.fastModeDefault,
           typingMode: entry?.typingMode,
           effectiveTools,
-          toolsCatalog: catalogRes.status === 'fulfilled' ? catalogRes.value : null,
+          toolsCatalog,
           skills: skillsRes.status === 'fulfilled' && Array.isArray(skillsRes.value?.skills) ? skillsRes.value.skills : [],
           sessions: agentSessions,
           files: sortWorkspaceFiles(Array.from(filesMap.values())),

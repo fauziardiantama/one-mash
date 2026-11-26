@@ -105,7 +105,8 @@ export default function AgentToolsCard({
     <View style={styles.wrap}>
       <View style={styles.card}>
         <Text style={styles.cardTitle}>
-          TOOLS EFEKTIF AKTIF ({effectiveIds.size} · PROFILE: {effectiveTools?.profile || 'default'})
+          TOOLS EFEKTIF {effectiveTools?.estimated ? '(ESTIMASI PROFIL)' : 'AKTIF'} ({effectiveIds.size} · PROFILE:{' '}
+          {effectiveTools?.profile || 'default'})
         </Text>
         {effectiveIds.size === 0 ? (
           <Text style={styles.muted}>Agen ini saat ini tidak memiliki tool aktif.</Text>
