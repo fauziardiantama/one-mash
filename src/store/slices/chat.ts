@@ -4,11 +4,20 @@ import type { AppStore, ChatMessage, ChatSlice, SessionSummary, ToolActivityItem
 
 let wsBound = false;
 let groupPollTimer: ReturnType<typeof setTimeout> | null = null;
+let directSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let lastDirectEventAt = 0;
 
 function stopGroupPoll(): void {
   if (groupPollTimer) {
     clearTimeout(groupPollTimer);
     groupPollTimer = null;
+  }
+}
+
+function stopDirectSync(): void {
+  if (directSyncTimer) {
+    clearTimeout(directSyncTimer);
+    directSyncTimer = null;
   }
 }
 
@@ -149,6 +158,71 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     }, 2000);
   };
 
+    const syncDirectHistory = async (agentId: string, sessionKey: string): Promise<boolean> => {
+    try {
+      const historyRes = await openclawWs.call<{
+        messages?: OpenClawHistoryMsg[];
+        sessionInfo?: { hasActiveRun?: boolean };
+      }>('chat.history', { sessionKey, limit: 100 });
+
+      const cur = get().chat;
+      if (cur.mode !== 'direct' || cur.activeSessionKey !== sessionKey) return false;
+
+      const raw = Array.isArray(historyRes?.messages) ? historyRes.messages : [];
+      const serverMessages: ChatMessage[] = raw
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m, i) => ({
+          id: m.id || `${sessionKey}-${i}`,
+          role: (m.role === 'assistant' ? 'ai' : 'user') as 'user' | 'ai',
+          text: extractTextContent(m.content),
+          createdAt: m.timestamp,
+        }))
+        .filter((m) => m.text.length > 0);
+
+      const hasActiveRun = Boolean(historyRes?.sessionInfo?.hasActiveRun);
+      const localCommittedCount = cur.messages.filter((m) => !m.streaming).length;
+      const shouldReplace = !hasActiveRun || serverMessages.length >= localCommittedCount;
+
+      set((s) => ({
+        chat: {
+          ...s.chat,
+          messages: shouldReplace ? serverMessages : s.chat.messages,
+          toolActivities: extractToolActivities(raw),
+          isStreaming: hasActiveRun,
+          activeRunId: hasActiveRun ? s.chat.activeRunId : null,
+          wsStatus: hasActiveRun ? 'streaming' : 'connected',
+          loading: false,
+        },
+      }));
+      return hasActiveRun;
+    } catch {
+      return get().chat.isStreaming;
+    }
+  };
+
+  const scheduleDirectSync = (agentId: string, sessionKey: string, attemptsLeft = 60) => {
+    stopDirectSync();
+    if (attemptsLeft <= 0) return;
+
+    directSyncTimer = setTimeout(async () => {
+      directSyncTimer = null;
+      const cur = get().chat;
+      if (cur.mode !== 'direct' || cur.activeSessionKey !== sessionKey || !cur.isStreaming) {
+        return;
+      }
+
+      if (Date.now() - lastDirectEventAt < 3500) {
+        scheduleDirectSync(agentId, sessionKey, attemptsLeft - 1);
+        return;
+      }
+
+      const stillActive = await syncDirectHistory(agentId, sessionKey);
+      if (stillActive && get().chat.isStreaming) {
+        scheduleDirectSync(agentId, sessionKey, attemptsLeft - 1);
+      }
+    }, 4000);
+  };
+
   return {
     chat: {
     mode: 'direct',
@@ -183,27 +257,43 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
             chat: { ...state.chat, wsStatus },
           }));
         },
+        onConnected: (isReconnect) => {
+          if (!isReconnect) return;
+          const s = get();
+          if (s.chat.mode === 'direct' && s.chat.activeSessionKey) {
+            const agentId = s.agents.activeAgentId || 'main';
+            const key = s.chat.activeSessionKey;
+            openclawWs
+              .call('sessions.messages.subscribe', { key, agentId })
+              .catch(() => {});
+            syncDirectHistory(agentId, key).then((stillActive) => {
+              if (stillActive) scheduleDirectSync(agentId, key);
+            });
+          } else if (s.chat.mode === 'group' && s.chat.activeGroupId) {
+            get().chat.openGroupChat(s.chat.activeGroupId).catch(() => {});
+          }
+        },
         onError: (msg) => {
           set((state) => ({
-            chat: { ...state.chat, error: msg, isStreaming: false },
+            chat: { ...state.chat, error: msg },
           }));
         },
         onChatEvent: (payload: OpenClawChatEvent) => {
           const state = get();
           if (state.chat.mode !== 'direct') return;
           if (payload.sessionKey && payload.sessionKey !== state.chat.activeSessionKey) return;
-          if (state.chat.activeRunId && payload.runId && payload.runId !== state.chat.activeRunId) return;
 
           const text = extractTextContent(payload.message?.content);
 
           if (payload.state === 'delta') {
+            lastDirectEventAt = Date.now();
             set((s) => {
               const msgs = [...s.chat.messages];
               const lastIdx = msgs.length - 1;
               const last = lastIdx >= 0 ? msgs[lastIdx] : null;
               if (last && last.role === 'ai' && last.streaming) {
                 msgs[lastIdx] = { ...last, text: text || last.text };
-              } else {
+              } else if (text) {
                 msgs.push({
                   id: `ai-stream-${payload.runId || Date.now()}`,
                   role: 'ai',
@@ -221,6 +311,8 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
               };
             });
           } else if (payload.state === 'final') {
+            lastDirectEventAt = Date.now();
+            stopDirectSync();
             set((s) => {
               const msgs = [...s.chat.messages];
               const lastIdx = msgs.length - 1;
@@ -245,7 +337,11 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
                 },
               };
             });
+            if (!text) {
+              syncDirectHistory(state.agents.activeAgentId || 'main', state.chat.activeSessionKey).catch(() => {});
+            }
           } else if (payload.state === 'error' || payload.state === 'aborted') {
+            stopDirectSync();
             set((s) => ({
               chat: {
                 ...s.chat,
@@ -262,6 +358,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
 
     openDirectChat: async (targetAgentId, explicitSessionKey) => {
       stopGroupPoll();
+      stopDirectSync();
       get().chat.initWsBindings();
       const agentId = (targetAgentId || get().agents.activeAgentId || 'main').trim();
       const defaultKey =
@@ -292,29 +389,11 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       try {
         await openclawWs.connect();
         await openclawWs.call('sessions.messages.subscribe', { key: sessionKey, agentId }).catch(() => {});
-        const historyRes = await openclawWs.call<{ messages?: OpenClawHistoryMsg[] }>('chat.history', {
-          sessionKey,
-          limit: 100,
-        });
-        const raw = Array.isArray(historyRes?.messages) ? historyRes.messages : [];
-        const messages: ChatMessage[] = raw
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: m.id || `${sessionKey}-${i}`,
-            role: (m.role === 'assistant' ? 'ai' : 'user') as 'user' | 'ai',
-            text: extractTextContent(m.content),
-            createdAt: m.timestamp,
-          }))
-          .filter((m) => m.text.length > 0);
-
-        set((s) => ({
-          chat: {
-            ...s.chat,
-            messages,
-            toolActivities: extractToolActivities(raw),
-            loading: false,
-          },
-        }));
+        const stillActive = await syncDirectHistory(agentId, sessionKey);
+        if (stillActive) {
+          lastDirectEventAt = 0;
+          scheduleDirectSync(agentId, sessionKey);
+        }
         get().chat.loadSessions().catch(() => {});
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Gagal memuat sesi OpenClaw';
@@ -560,6 +639,8 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
           message: outboundText,
           idempotencyKey: makeUuid(),
         });
+        lastDirectEventAt = Date.now();
+        scheduleDirectSync(agentId, sessionKey);
         set((s) => ({
           chat: {
             ...s.chat,
@@ -567,6 +648,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
           },
         }));
       } catch (err: unknown) {
+        stopDirectSync();
         const msg = err instanceof Error ? err.message : 'Gagal mengirim pesan ke OpenClaw';
         set((s) => ({
           chat: { ...s.chat, isStreaming: false, error: msg },
@@ -575,6 +657,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     },
 
     abortGeneration: async () => {
+      stopDirectSync();
       const { activeSessionKey, activeRunId } = get().chat;
       try {
         await openclawWs.call('chat.abort', {

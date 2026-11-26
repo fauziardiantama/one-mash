@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { type ComponentRef, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   Easing,
   Keyboard,
   PanResponder,
@@ -24,6 +25,7 @@ import TypingIndicator from '../components/chat/TypingIndicator';
 import EditAvatarPopup from '../components/profile/EditAvatarPopup';
 import ModelPickerSheet from '../components/profile/ModelPickerSheet';
 import ProfileTakeoverLayer from '../components/profile/ProfileTakeoverLayer';
+import ErrorMessage from '../components/ui/ErrorMessage';
 import ScreenShell from '../components/ui/ScreenShell';
 import { BottomFade } from '../components/ui/TopFade';
 import { useStore } from '../store';
@@ -45,8 +47,10 @@ export default function ChatScreen() {
   const abortGeneration = useStore((s) => s.chat.abortGeneration);
   const setReplyTo = useStore((s) => s.chat.setReplyTo);
   const openDirectChat = useStore((s) => s.chat.openDirectChat);
+  const openGroupChat = useStore((s) => s.chat.openGroupChat);
   const isStreaming = useStore((s) => s.chat.isStreaming);
   const wsStatus = useStore((s) => s.chat.wsStatus);
+  const chatError = useStore((s) => s.chat.error);
   const activeAgentId = useStore((s) => s.agents.activeAgentId);
   const agentsList = useStore((s) => s.agents.list);
   const loadAgents = useStore((s) => s.agents.loadAgents);
@@ -64,7 +68,18 @@ export default function ChatScreen() {
     if (state.chat.mode === 'direct') {
       openDirectChat(state.agents.activeAgentId, state.chat.activeSessionKey).catch(() => {});
     }
-  }, [loadAgents, openDirectChat]);
+
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') return;
+      const cur = useStore.getState();
+      if (cur.chat.mode === 'direct' && cur.chat.activeSessionKey) {
+        openDirectChat(cur.agents.activeAgentId, cur.chat.activeSessionKey).catch(() => {});
+      } else if (cur.chat.mode === 'group' && cur.chat.activeGroupId) {
+        openGroupChat(cur.chat.activeGroupId).catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [loadAgents, openDirectChat, openGroupChat]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -198,6 +213,7 @@ export default function ChatScreen() {
                 onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}
               />
             </View>
+            <ErrorMessage message={chatError} />
             <Composer
               isStreaming={isStreaming}
               onSend={(text) => {

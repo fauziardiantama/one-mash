@@ -17,6 +17,7 @@ export interface OpenClawChatEvent {
 
 export interface OpenClawWsListeners {
   onStatusChange?: (status: WsConnectionStatus) => void;
+  onConnected?: (isReconnect: boolean) => void;
   onChatEvent?: (payload: OpenClawChatEvent) => void;
   onRawEvent?: (event: string, payload: unknown) => void;
   onError?: (message: string) => void;
@@ -42,7 +43,9 @@ class OpenClawWsClient {
   private reqSeq = 0;
   private connectSent = false;
   private manualClose = false;
+  private hasConnectedOnce = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
   private readyPromise: Promise<void> | null = null;
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((err: Error) => void) | null = null;
@@ -140,10 +143,14 @@ class OpenClawWsClient {
       if (frame.type === 'res' && frame.id === CONNECT_REQ_ID) {
         clearTimeout(fallbackTimer);
         if (frame.ok === true) {
+          const isReconnect = this.hasConnectedOnce;
+          this.hasConnectedOnce = true;
           this.updateStatus('connected');
+          this.startKeepalive();
           this.resolveReady?.();
           this.resolveReady = null;
           this.rejectReady = null;
+          this.listeners.onConnected?.(isReconnect);
         } else {
           const errObj = frame.error as Record<string, unknown> | undefined;
           const msg =
@@ -190,6 +197,7 @@ class OpenClawWsClient {
     ws.onclose = () => {
       if (this.socket !== ws) return;
       clearTimeout(fallbackTimer);
+      this.stopKeepalive();
       this.updateStatus('disconnected');
       this.rejectReady?.(new Error('Koneksi OpenClaw ditutup sebelum siap'));
       this.resolveReady = null;
@@ -238,12 +246,30 @@ class OpenClawWsClient {
 
   disconnect(): void {
     this.manualClose = true;
+    this.hasConnectedOnce = false;
+    this.stopKeepalive();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
     this.closeSocketOnly();
     this.updateStatus('disconnected');
+  }
+
+  private startKeepalive(): void {
+    this.stopKeepalive();
+    this.keepaliveTimer = setInterval(() => {
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        this.call('health', {}, 10_000).catch(() => {});
+      }
+    }, 25_000);
+  }
+
+  private stopKeepalive(): void {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
   }
 
   private clearPending(reason: string): void {
