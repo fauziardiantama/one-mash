@@ -52,10 +52,11 @@ export default function CharactersSettingsScreen() {
       });
       if (res.canceled || !res.assets?.length) return;
       const asset = res.assets[0];
+      const isJsonFile = asset.name?.toLowerCase().endsWith('.json') || asset.mimeType === 'application/json';
       const file = {
         uri: asset.uri,
-        name: asset.name || 'character.png',
-        mimeType: asset.mimeType || (asset.name?.endsWith('.json') ? 'application/json' : 'image/png'),
+        name: asset.name || (isJsonFile ? 'character.json' : 'character.png'),
+        mimeType: isJsonFile ? 'application/json' : asset.mimeType || 'image/png',
       };
       const parsed = await parseCard(file);
       setPickedFile(file);

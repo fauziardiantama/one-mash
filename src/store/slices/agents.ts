@@ -118,10 +118,15 @@ function sortWorkspaceFiles(files: AgentWorkspaceFile[]): AgentWorkspaceFile[] {
   });
 }
 
-async function patchAgentConfigEntry(agentId: string, entryPatch: Record<string, unknown>): Promise<void> {
+async function patchAgentConfigEntry(
+  agentId: string,
+  entryPatch: Record<string, unknown>,
+  replacePaths: string[] = [],
+): Promise<void> {
   const cfgRes = await openclawWs.call<OpenClawConfigGetPayload>('config.get', {});
   await openclawWs.call('config.patch', {
     ...(cfgRes?.hash ? { baseHash: cfgRes.hash } : {}),
+    ...(replacePaths.length > 0 ? { replacePaths } : {}),
     raw: JSON.stringify({ agents: { entries: { [agentId]: entryPatch } } }),
   });
 }
@@ -611,16 +616,20 @@ export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (s
           await openclawWs.call('agents.update', updatePayload);
         }
 
+        const entryPrefix = `agents.entries.${agentId}`;
+        const replacePaths: string[] = [];
         const entryPatch: Record<string, unknown> = {};
         if (patch.description !== undefined) {
           entryPatch.description = patch.description?.trim() ? patch.description.trim() : null;
         }
         if (patch.emoji === null) {
           entryPatch.identity = { emoji: null };
+          replacePaths.push(`${entryPrefix}.identity.emoji`);
         }
         if (patch.modelPrimary !== undefined || patch.modelFallbacks !== undefined) {
           if (patch.modelPrimary === null) {
             entryPatch.model = null;
+            replacePaths.push(`${entryPrefix}.model`, `${entryPrefix}.model.fallbacks`);
           } else {
             const current = get().agents.details[agentId]?.summary;
             const primary = patch.modelPrimary !== undefined ? patch.modelPrimary.trim() : current?.modelPrimary;
@@ -630,6 +639,7 @@ export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (s
                 primary,
                 ...(fallbacks && fallbacks.length > 0 ? { fallbacks } : { fallbacks: [] }),
               };
+              replacePaths.push(`${entryPrefix}.model.fallbacks`);
             }
           }
         }
@@ -647,10 +657,13 @@ export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (s
               ? { delegationMode: patch.subagentsDelegationMode || null }
               : {}),
           };
+          if (patch.subagentsAllow !== undefined) {
+            replacePaths.push(`${entryPrefix}.subagents.allowAgents`);
+          }
         }
 
         if (Object.keys(entryPatch).length > 0) {
-          await patchAgentConfigEntry(agentId, entryPatch);
+          await patchAgentConfigEntry(agentId, entryPatch, replacePaths);
         }
 
         await Promise.all([get().agents.loadAgents(), get().agents.loadAgentDetail(agentId)]);
@@ -672,13 +685,18 @@ export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (s
         agents: { ...state.agents, savingConfig: true, error: null },
       }));
       try {
+        const entryPrefix = `agents.entries.${agentId}`;
         const toolsPatch: Record<string, unknown> = {
           profile: policy.profile ? policy.profile : null,
           allow: policy.allow === null ? null : policy.allow ?? [],
           alsoAllow: policy.alsoAllow && policy.alsoAllow.length > 0 ? policy.alsoAllow : null,
           deny: policy.deny && policy.deny.length > 0 ? policy.deny : null,
         };
-        await patchAgentConfigEntry(agentId, { tools: toolsPatch });
+        await patchAgentConfigEntry(agentId, { tools: toolsPatch }, [
+          `${entryPrefix}.tools.allow`,
+          `${entryPrefix}.tools.alsoAllow`,
+          `${entryPrefix}.tools.deny`,
+        ]);
         await get().agents.loadAgentDetail(agentId);
         set((state) => ({
           agents: { ...state.agents, savingConfig: false },
@@ -698,7 +716,7 @@ export const createAgentsSlice: StateCreator<AppStore, [], [], AgentsSlice> = (s
         agents: { ...state.agents, savingConfig: true, error: null },
       }));
       try {
-        await patchAgentConfigEntry(agentId, { skills: skillsFilter });
+        await patchAgentConfigEntry(agentId, { skills: skillsFilter }, [`agents.entries.${agentId}.skills`]);
         await get().agents.loadAgentDetail(agentId);
         set((state) => ({
           agents: { ...state.agents, savingConfig: false },

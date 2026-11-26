@@ -65,11 +65,12 @@ export function deleteCharacter(agentId: string): Promise<{ deleted: boolean }> 
 }
 
 function makeCardFormData(file: { uri: string; name?: string; mimeType?: string }): FormData {
+  const isJson = Boolean(file.name?.toLowerCase().endsWith('.json')) || file.mimeType === 'application/json';
   const fd = new FormData();
   fd.append('file', {
     uri: file.uri,
-    name: file.name || 'character.png',
-    type: file.mimeType || 'image/png',
+    name: file.name || (isJson ? 'character.json' : 'character.png'),
+    type: isJson ? 'application/json' : file.mimeType || 'image/png',
   } as unknown as Blob);
   return fd;
 }
