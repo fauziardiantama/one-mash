@@ -211,7 +211,7 @@ export default function ChatScreen() {
                     </View>
                   );
                 })}
-                {isStreaming && (!messages.length || messages[messages.length - 1]?.role === 'user') && (
+                {isStreaming && (mode === 'group' || !messages.length || messages[messages.length - 1]?.role === 'user') && (
                   <TypingIndicator />
                 )}
               </ScrollView>

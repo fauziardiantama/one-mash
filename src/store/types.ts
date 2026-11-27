@@ -278,6 +278,7 @@ export interface ChatSlice {
     openDirectChat: (agentId?: string, sessionKey?: string) => Promise<void>;
     openGroupChat: (groupId: string) => Promise<void>;
     setGroupSpeaker: (agentId: string) => void;
+    triggerGroupTurn: (speaker?: string) => Promise<void>;
     loadSessions: () => Promise<void>;
     newDirectSession: () => Promise<void>;
     setSessionModel: (modelRef: string | null) => Promise<void>;

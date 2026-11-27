@@ -1,5 +1,14 @@
 import { StateCreator } from 'zustand';
-import { abortGroupTurn, getGroup, openclawWs, postGroupMessage, type GroupMessageItem, type OpenClawChatEvent } from '../../api';
+import {
+  abortGroupTurn,
+  getGroup,
+  openclawWs,
+  postGroupMessage,
+  triggerGroupTurn as apiTriggerGroupTurn,
+  type GroupMessageItem,
+  type OpenClawChatEvent,
+  type PostGroupMessageResponse,
+} from '../../api';
 import type { AppStore, ChatMessage, ChatSlice, SessionSummary, ToolActivityItem } from '../types';
 
 let wsBound = false;
@@ -157,6 +166,41 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       }
     }, 2000);
   };
+
+    const executeGroupTurn = async (
+      groupId: string,
+      run: () => Promise<PostGroupMessageResponse>,
+      fallbackErr: string,
+    ) => {
+      try {
+        const res = await run();
+        if (res.reply !== undefined) {
+          set((s) => ({
+            chat: {
+              ...s.chat,
+              isStreaming: false,
+              messages: [
+                ...s.chat.messages,
+                {
+                  id: `grp-ai-${Date.now()}`,
+                  role: 'ai',
+                  author: res.speaker,
+                  text: res.reply as string,
+                  createdAt: Date.now(),
+                },
+              ],
+            },
+          }));
+        } else {
+          scheduleGroupPoll(groupId);
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : fallbackErr;
+        set((s) => ({
+          chat: { ...s.chat, isStreaming: false, error: msg },
+        }));
+      }
+    };
 
     const syncDirectHistory = async (agentId: string, sessionKey: string): Promise<boolean> => {
     try {
@@ -451,6 +495,24 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
         chat: { ...s.chat, activeGroupSpeaker: agentId },
       })),
 
+    triggerGroupTurn: async (groupSpeaker?: string) => {
+      const state = get();
+      if (state.chat.mode !== 'group' || !state.chat.activeGroupId || state.chat.isStreaming) {
+        return;
+      }
+      const groupId = state.chat.activeGroupId;
+      const group = state.groups.list.find((g) => g.id === groupId);
+      const speaker = groupSpeaker || state.chat.activeGroupSpeaker || group?.members?.[0] || 'main';
+      set((s) => ({
+        chat: { ...s.chat, activeGroupSpeaker: speaker, isStreaming: true, error: null },
+      }));
+      await executeGroupTurn(
+        groupId,
+        () => apiTriggerGroupTurn(groupId, speaker),
+        'Gagal memicu balasan agen grup',
+      );
+    },
+
     loadSessions: async () => {
       try {
         get().chat.initWsBindings();
@@ -608,34 +670,11 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
         const groupId = state.chat.activeGroupId;
         const group = state.groups.list.find((g) => g.id === groupId);
         const speaker = groupSpeaker || state.chat.activeGroupSpeaker || group?.members?.[0] || 'main';
-        try {
-          const res = await postGroupMessage(groupId, outboundText, speaker);
-          if (res.reply !== undefined) {
-            set((s) => ({
-              chat: {
-                ...s.chat,
-                isStreaming: false,
-                messages: [
-                  ...s.chat.messages,
-                  {
-                    id: `grp-ai-${Date.now()}`,
-                    role: 'ai',
-                    author: res.speaker,
-                    text: res.reply as string,
-                    createdAt: Date.now(),
-                  },
-                ],
-              },
-            }));
-          } else {
-            scheduleGroupPoll(groupId);
-          }
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : 'Gagal mengirim pesan grup';
-          set((s) => ({
-            chat: { ...s.chat, isStreaming: false, error: msg },
-          }));
-        }
+        await executeGroupTurn(
+          groupId,
+          () => postGroupMessage(groupId, outboundText, speaker),
+          'Gagal mengirim pesan grup',
+        );
         return;
       }
 

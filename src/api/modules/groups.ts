@@ -63,6 +63,17 @@ export function postGroupMessage(
   });
 }
 
+export function triggerGroupTurn(
+  id: string,
+  speaker: string,
+): Promise<PostGroupMessageResponse> {
+  return apiRequest(`/groups/${encodeURIComponent(id)}/turn?async=1`, {
+    method: 'POST',
+    body: { speaker, async: true },
+    timeoutMs: 15_000,
+  });
+}
+
 export function deleteGroup(id: string): Promise<{ deleted: boolean; id: string }> {
   return apiRequest(`/groups/${encodeURIComponent(id)}`, {
     method: 'DELETE',

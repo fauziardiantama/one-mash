@@ -1,12 +1,16 @@
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useStore } from '../../store';
 import { COLORS, FONTS, RADII, SPACING } from '../../theme';
+import Icon from '../ui/Icon';
 
 export default function GroupSpeakerBar() {
   const mode = useStore((s) => s.chat.mode);
   const activeGroupId = useStore((s) => s.chat.activeGroupId);
   const activeGroupSpeaker = useStore((s) => s.chat.activeGroupSpeaker);
+  const messages = useStore((s) => s.chat.messages);
+  const isStreaming = useStore((s) => s.chat.isStreaming);
   const setGroupSpeaker = useStore((s) => s.chat.setGroupSpeaker);
+  const triggerGroupTurn = useStore((s) => s.chat.triggerGroupTurn);
   const groupsList = useStore((s) => s.groups.list);
   const agentsList = useStore((s) => s.agents.list);
 
@@ -18,12 +22,15 @@ export default function GroupSpeakerBar() {
     ? activeGroupSpeaker
     : activeGroup.members[0];
 
+  const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+  const canReply = Boolean(lastMsg) && !isStreaming && !(lastMsg?.role === 'ai' && lastMsg?.author === selected);
+
   const nameMap = new Map(agentsList.map((a) => [a.id, a.name]));
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>Pembicara:</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll} contentContainerStyle={styles.row}>
         {activeGroup.members.map((memberId) => {
           const isSelected = selected === memberId;
           const displayName = nameMap.get(memberId) || memberId;
@@ -40,6 +47,20 @@ export default function GroupSpeakerBar() {
           );
         })}
       </ScrollView>
+      <TouchableOpacity
+        activeOpacity={0.75}
+        disabled={!canReply}
+        style={[styles.replyBtn, !canReply && styles.replyBtnDisabled]}
+        onPress={() => {
+          triggerGroupTurn(selected).catch(() => {});
+        }}>
+        <Icon
+          name="corner-up-left"
+          size={13}
+          color={canReply ? COLORS.textPrimary : COLORS.textMuted}
+        />
+        <Text style={[styles.replyBtnText, !canReply && styles.replyBtnTextDisabled]}>Balas</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -57,10 +78,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.bold,
     marginRight: SPACING.xs,
   },
+  scroll: {
+    flex: 1,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
+    paddingRight: SPACING.xs,
   },
   chip: {
     backgroundColor: COLORS.surfaceElevated,
@@ -82,5 +107,30 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: COLORS.textPrimary,
     fontFamily: FONTS.bold,
+  },
+  replyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.surfaceControl,
+    borderWidth: 1,
+    borderColor: COLORS.brandPinkSoft,
+    borderRadius: RADII.pill,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 5,
+    marginLeft: SPACING.xs,
+  },
+  replyBtnDisabled: {
+    backgroundColor: COLORS.surfaceElevated,
+    borderColor: COLORS.border,
+    opacity: 0.5,
+  },
+  replyBtnText: {
+    color: COLORS.textPrimary,
+    fontSize: 12,
+    fontFamily: FONTS.bold,
+  },
+  replyBtnTextDisabled: {
+    color: COLORS.textMuted,
   },
 });
