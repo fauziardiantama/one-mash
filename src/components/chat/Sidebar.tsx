@@ -4,6 +4,7 @@ import { useKeyboardHandler } from 'react-native-keyboard-controller';
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../../store';
+import { isHiddenSystemSessionKey } from '../../store/slices/chat';
 import { COLORS, FONTS, LAYOUT, RADII, SPACING } from '../../theme';
 import AgentAvatar from '../ui/AgentAvatar';
 import Icon, { type IconName } from '../ui/Icon';
@@ -25,25 +26,6 @@ interface SidebarProps {
 }
 
 const MAIN_CHAT_KEY = 'agent:main:main-chat';
-
-function extractSessionSuffix(key: string): string {
-  const trimmed = key.trim();
-  if (!trimmed.toLowerCase().startsWith('agent:')) return trimmed;
-  const parts = trimmed.split(':');
-  return parts.length >= 3 ? parts.slice(2).join(':') : trimmed;
-}
-
-function isReservedOrGroupSession(key: string): boolean {
-  const suffix = extractSessionSuffix(key).toLowerCase();
-  return (
-    suffix === 'main-chat' ||
-    suffix === 'main' ||
-    suffix === 'notification-history' ||
-    suffix === 'notifications' ||
-    suffix.startsWith('group-') ||
-    suffix.startsWith('group:')
-  );
-}
 
 export default function Sidebar({ onSettingsPress, onSelectChat }: SidebarProps) {
   const insets = useSafeAreaInsets();
@@ -96,7 +78,7 @@ export default function Sidebar({ onSettingsPress, onSelectChat }: SidebarProps)
 
   const normalizedQuery = query.trim().toLowerCase();
   const sideSessions = sessions.filter((s) => {
-    if (isReservedOrGroupSession(s.key)) return false;
+    if (isHiddenSystemSessionKey(s.key)) return false;
     if (!normalizedQuery) return true;
     return s.title.toLowerCase().includes(normalizedQuery) || s.agentId.toLowerCase().includes(normalizedQuery);
   });

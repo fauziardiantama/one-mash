@@ -50,15 +50,28 @@ export function extractSessionIdSuffix(key: string): string {
 }
 
 export function isHiddenSystemSessionKey(key: string): boolean {
-  const suffix = extractSessionIdSuffix(key).toLowerCase();
+  const normalized = key.trim().toLowerCase();
+  const suffix = extractSessionIdSuffix(normalized);
   return (
     suffix === 'main-chat' ||
-    suffix === 'main' ||
+    normalized === 'agent:main:main' ||
     suffix === 'notification-history' ||
     suffix === 'notifications' ||
     suffix.startsWith('group-') ||
     suffix.startsWith('group:')
   );
+}
+
+function resolveDefaultSessionKey(agentId: string, state: AppStore): string {
+  if (agentId === 'main') return MAIN_CHAT_SESSION_KEY;
+  const legacyMainKey = `agent:${agentId}:main`;
+  const cached = state.chat.mainSessionKeys[agentId];
+  if (cached && cached !== legacyMainKey && !isHiddenSystemSessionKey(cached)) {
+    return cached;
+  }
+  const existing = state.chat.sessions.find((s) => s.agentId === agentId && !isHiddenSystemSessionKey(s.key));
+  if (existing) return existing.key;
+  return `agent:${agentId}:chat-${Date.now()}`;
 }
 
 interface OpenClawHistoryMsg {
@@ -405,11 +418,13 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       stopDirectSync();
       get().chat.initWsBindings();
       const agentId = (targetAgentId || get().agents.activeAgentId || 'main').trim();
-      const defaultKey =
+      const sessionKey = explicitSessionKey || resolveDefaultSessionKey(agentId, get());
+      const rememberedKey =
         agentId === 'main'
           ? MAIN_CHAT_SESSION_KEY
-          : get().chat.mainSessionKeys[agentId] || `agent:${agentId}:main`;
-      const sessionKey = explicitSessionKey || defaultKey;
+          : isHiddenSystemSessionKey(sessionKey)
+            ? get().chat.mainSessionKeys[agentId]
+            : sessionKey;
 
       const activeAgent = get().agents.list.find((a) => a.id === agentId);
       set((s) => ({
@@ -424,7 +439,9 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
           activeSessionKey: sessionKey,
           activeSessionModel: activeAgent?.modelPrimary || null,
           activeSessionModelOverridden: false,
-          mainSessionKeys: { ...s.chat.mainSessionKeys, [agentId]: defaultKey },
+          mainSessionKeys: rememberedKey
+            ? { ...s.chat.mainSessionKeys, [agentId]: rememberedKey }
+            : s.chat.mainSessionKeys,
           loading: true,
           error: null,
         },
@@ -678,8 +695,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       }
 
       const agentId = state.agents.activeAgentId || 'main';
-      const defaultKey = agentId === 'main' ? MAIN_CHAT_SESSION_KEY : `agent:${agentId}:main`;
-      const sessionKey = state.chat.activeSessionKey || defaultKey;
+      const sessionKey = state.chat.activeSessionKey || resolveDefaultSessionKey(agentId, state);
       try {
         await openclawWs.connect();
         await openclawWs.call('sessions.messages.subscribe', { key: sessionKey, agentId }).catch(() => {});
@@ -697,6 +713,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
             activeRunId: sendRes?.runId || null,
           },
         }));
+        get().chat.loadSessions().catch(() => {});
       } catch (err: unknown) {
         stopDirectSync();
         const msg = err instanceof Error ? err.message : 'Gagal mengirim pesan ke OpenClaw';
