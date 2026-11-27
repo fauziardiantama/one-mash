@@ -30,7 +30,12 @@ export default function GroupSpeakerBar() {
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>Pembicara:</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll} contentContainerStyle={styles.row}>
+      <ScrollView
+        horizontal
+        keyboardShouldPersistTaps="handled"
+        showsHorizontalScrollIndicator={false}
+        style={styles.scroll}
+        contentContainerStyle={styles.row}>
         {activeGroup.members.map((memberId) => {
           const isSelected = selected === memberId;
           const displayName = nameMap.get(memberId) || memberId;
