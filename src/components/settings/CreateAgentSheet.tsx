@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ComponentRef, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { ModelOption } from '../../store/types';
 import { COLORS, FONTS, RADII, SPACING } from '../../theme';
@@ -21,10 +21,19 @@ export default function CreateAgentSheet({
   onClose,
   onCreate,
 }: CreateAgentSheetProps) {
+  const scrollRef = useRef<ComponentRef<typeof ScrollView>>(null);
+  const fieldY = useRef<Record<string, number>>({});
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('');
   const [workspace, setWorkspace] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+
+  const scrollToField = (key: string) => {
+    const y = fieldY.current[key] ?? 0;
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - SPACING.sm), animated: true });
+    });
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) return;
@@ -45,31 +54,44 @@ export default function CreateAgentSheet({
       <Text style={styles.title}>Buat Agen OpenClaw Baru</Text>
       <Text style={styles.sub}>Agen standar OpenClaw lengkap dengan workspace & dokumen otomatis.</Text>
 
-      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <AppInput
-          label="Nama Agen"
-          placeholder="Contoh: Research Assistant"
-          variant="card"
-          value={name}
-          onChangeText={setName}
-        />
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}>
+        <View onLayout={(e) => { fieldY.current.name = e.nativeEvent.layout.y; }}>
+          <AppInput
+            label="Nama Agen"
+            placeholder="Contoh: Research Assistant"
+            variant="card"
+            value={name}
+            onChangeText={setName}
+            onFocus={() => scrollToField('name')}
+          />
+        </View>
 
-        <AppInput
-          label="Emoji (Opsional)"
-          placeholder="Contoh: 🤖"
-          variant="card"
-          value={emoji}
-          onChangeText={setEmoji}
-        />
+        <View onLayout={(e) => { fieldY.current.emoji = e.nativeEvent.layout.y; }}>
+          <AppInput
+            label="Emoji (Opsional)"
+            placeholder="Contoh: 🤖"
+            variant="card"
+            value={emoji}
+            onChangeText={setEmoji}
+            onFocus={() => scrollToField('emoji')}
+          />
+        </View>
 
-        <AppInput
-          label="Workspace Path (Opsional)"
-          placeholder="Kosongkan untuk path default OpenClaw"
-          variant="card"
-          autoCapitalize="none"
-          value={workspace}
-          onChangeText={setWorkspace}
-        />
+        <View onLayout={(e) => { fieldY.current.workspace = e.nativeEvent.layout.y; }}>
+          <AppInput
+            label="Workspace Path (Opsional)"
+            placeholder="Kosongkan untuk path default OpenClaw"
+            variant="card"
+            autoCapitalize="none"
+            value={workspace}
+            onChangeText={setWorkspace}
+            onFocus={() => scrollToField('workspace')}
+          />
+        </View>
 
         <Text style={styles.label}>Primary Model (Opsional)</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
@@ -108,7 +130,7 @@ export default function CreateAgentSheet({
 }
 
 const styles = StyleSheet.create({
-  scroll: { maxHeight: 330 },
+  scroll: { maxHeight: 330, flexShrink: 1 },
   title: { color: COLORS.textPrimary, fontSize: 18, fontFamily: FONTS.bold, marginBottom: 4 },
   sub: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.regular, marginBottom: SPACING.lg },
   label: {

@@ -132,7 +132,7 @@ export default function GroupsSettingsScreen() {
           placeholder="Diskusi Tim"
         />
         <Text style={styles.memberHeader}>Pilih Anggota ({selectedMembers.length}):</Text>
-        <ScrollView style={styles.memberScroll} nestedScrollEnabled>
+        <ScrollView style={styles.memberScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
           <View style={styles.chipWrap}>
             {agents.map((ag) => {
               const picked = selectedMembers.includes(ag.id);
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
   meta: { color: COLORS.textMuted, fontSize: 12, fontFamily: FONTS.regular, marginTop: 2 },
   sheetTitle: { color: COLORS.textPrimary, fontSize: 20, fontFamily: FONTS.bold, marginBottom: SPACING.md },
   memberHeader: { color: COLORS.textMuted, fontSize: 13, fontFamily: FONTS.bold, marginBottom: SPACING.sm },
-  memberScroll: { maxHeight: 220, marginBottom: SPACING.lg },
+  memberScroll: { maxHeight: 220, flexShrink: 1, marginBottom: SPACING.lg },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   chip: {
     backgroundColor: COLORS.surfaceElevated,

@@ -1,9 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AkashPanel from '../../components/settings/AkashPanel';
 import ModalPanel from '../../components/settings/ModalPanel';
 import FloatingHeader from '../../components/ui/FloatingHeader';
+import KeyboardScrollView from '../../components/ui/KeyboardScrollView';
 import ScreenShell from '../../components/ui/ScreenShell';
 import { useStore } from '../../store';
 import { COLORS, FONTS, LAYOUT, RADII, SPACING } from '../../theme';
@@ -21,7 +22,7 @@ export default function ProvidersSettingsScreen() {
 
   return (
     <ScreenShell>
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}>
+      <KeyboardScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}>
         <View style={styles.segment}>
           {(['akash', 'modal'] as const).map((item) => {
             const active = tab === item;
@@ -40,7 +41,7 @@ export default function ProvidersSettingsScreen() {
         </View>
 
         {tab === 'akash' ? <AkashPanel /> : <ModalPanel />}
-      </ScrollView>
+      </KeyboardScrollView>
 
       <FloatingHeader
         title="Dompet & Compute"

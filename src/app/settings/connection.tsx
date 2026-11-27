@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import AppButton from '../../components/ui/AppButton';
 import AppInput from '../../components/ui/AppInput';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 import FloatingHeader from '../../components/ui/FloatingHeader';
+import KeyboardScrollView from '../../components/ui/KeyboardScrollView';
 import ScreenShell from '../../components/ui/ScreenShell';
 import { useStore } from '../../store';
 import { COLORS, FONTS, LAYOUT, RADII, SPACING } from '../../theme';
@@ -42,7 +43,7 @@ export default function ConnectionSettingsScreen() {
 
   return (
     <ScreenShell>
-      <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}>
+      <KeyboardScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}>
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Backend Endpoint</Text>
           <Text style={styles.statusText}>
@@ -89,7 +90,7 @@ export default function ConnectionSettingsScreen() {
             router.replace('/connect');
           }}
         />
-      </ScrollView>
+      </KeyboardScrollView>
 
       <FloatingHeader
         title="Konektor & Gateway"

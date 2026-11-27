@@ -1,10 +1,11 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppButton from '../components/ui/AppButton';
 import AppInput from '../components/ui/AppInput';
 import ErrorMessage from '../components/ui/ErrorMessage';
+import KeyboardScrollView from '../components/ui/KeyboardScrollView';
 import ScreenShell from '../components/ui/ScreenShell';
 import { useStore } from '../store';
 import { COLORS, FONTS, SPACING } from '../theme';
@@ -38,7 +39,9 @@ export default function ConnectScreen() {
 
   return (
     <ScreenShell>
-      <View style={[styles.container, { paddingTop: insets.top + SPACING.xxl }]}>
+      <KeyboardScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.container, { paddingTop: insets.top + SPACING.xxl }]}>
         <Text style={styles.title}>O.N.E Mash</Text>
         <Text style={styles.subtitle}>
           Hubungkan aplikasi ke server backend OpenClaw Network Ecosystem.
@@ -67,15 +70,17 @@ export default function ConnectScreen() {
           onPress={handleSubmit}
           style={styles.submitBtn}
         />
-      </View>
+      </KeyboardScrollView>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
   container: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xxxl,
   },
   title: {
     color: COLORS.textPrimary,

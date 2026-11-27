@@ -11,6 +11,7 @@ import AgentAvatar from '../../components/ui/AgentAvatar';
 import AppButton from '../../components/ui/AppButton';
 import ErrorMessage from '../../components/ui/ErrorMessage';
 import FloatingHeader from '../../components/ui/FloatingHeader';
+import KeyboardScrollView from '../../components/ui/KeyboardScrollView';
 import ScreenShell from '../../components/ui/ScreenShell';
 import { useStore } from '../../store';
 import { COLORS, FONTS, LAYOUT, RADII, SPACING } from '../../theme';
@@ -135,10 +136,9 @@ export default function AgentDetailScreen() {
 
   return (
     <ScreenShell>
-      <ScrollView
+      <KeyboardScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}
-        keyboardShouldPersistTaps="handled">
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight }]}>
         <View style={styles.heroCard}>
           <AgentAvatar agentId={agentId} name={displayName} size={72} />
           <Text style={styles.heroName}>
@@ -268,7 +268,7 @@ export default function AgentDetailScreen() {
             onDeleteAgent={handleDeleteAgent}
           />
         ) : null}
-      </ScrollView>
+      </KeyboardScrollView>
 
       <FloatingHeader
         title="Detail & Edit Agen"

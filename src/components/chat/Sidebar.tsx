@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useKeyboardHandler } from 'react-native-keyboard-controller';
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../../store';
 import { COLORS, FONTS, LAYOUT, RADII, SPACING } from '../../theme';
@@ -50,6 +52,25 @@ export default function Sidebar({ onSettingsPress, onSelectChat }: SidebarProps)
   const [groupsCollapsed, setGroupsCollapsed] = useState(false);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
+  const keyboardHeight = useSharedValue(0);
+
+  useKeyboardHandler(
+    {
+      onMove: (e) => {
+        'worklet';
+        keyboardHeight.value = Math.max(e.height, 0);
+      },
+      onEnd: (e) => {
+        'worklet';
+        keyboardHeight.value = Math.max(e.height, 0);
+      },
+    },
+    [],
+  );
+
+  const innerKeyboardStyle = useAnimatedStyle(() => ({
+    paddingBottom: Math.max(SPACING.xxl + insets.bottom, keyboardHeight.value + SPACING.md),
+  }));
 
   const activeAgentId = useStore((s) => s.agents.activeAgentId);
   const agentsList = useStore((s) => s.agents.list);
@@ -84,10 +105,11 @@ export default function Sidebar({ onSettingsPress, onSelectChat }: SidebarProps)
 
   return (
     <View style={styles.sidebar}>
-      <View style={[styles.inner, { paddingBottom: SPACING.xxl + insets.bottom }]}>
+      <Reanimated.View style={[styles.inner, innerKeyboardStyle]}>
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + SPACING.md }]}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>{displayName}</Text>
 
@@ -251,7 +273,7 @@ export default function Sidebar({ onSettingsPress, onSelectChat }: SidebarProps)
             <Icon name="edit" size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
-      </View>
+      </Reanimated.View>
     </View>
   );
 }
