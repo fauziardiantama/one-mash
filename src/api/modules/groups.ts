@@ -53,23 +53,17 @@ export interface PostGroupMessageResponse {
 
 export function postGroupMessage(
   id: string,
-  text: string,
+  text: string | undefined,
   speaker: string,
 ): Promise<PostGroupMessageResponse> {
+  const trimmed = typeof text === 'string' ? text.trim() : '';
+  const body: { speaker: string; async: boolean; text?: string } = { speaker, async: true };
+  if (trimmed.length > 0) {
+    body.text = trimmed;
+  }
   return apiRequest(`/groups/${encodeURIComponent(id)}/messages?async=1`, {
     method: 'POST',
-    body: { text, speaker, async: true },
-    timeoutMs: 15_000,
-  });
-}
-
-export function triggerGroupTurn(
-  id: string,
-  speaker: string,
-): Promise<PostGroupMessageResponse> {
-  return apiRequest(`/groups/${encodeURIComponent(id)}/turn?async=1`, {
-    method: 'POST',
-    body: { speaker, async: true },
+    body,
     timeoutMs: 15_000,
   });
 }

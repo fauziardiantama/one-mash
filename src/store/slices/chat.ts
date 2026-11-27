@@ -4,7 +4,6 @@ import {
   getGroup,
   openclawWs,
   postGroupMessage,
-  triggerGroupTurn as apiTriggerGroupTurn,
   type GroupMessageItem,
   type OpenClawChatEvent,
   type PostGroupMessageResponse,
@@ -508,7 +507,7 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
       }));
       await executeGroupTurn(
         groupId,
-        () => apiTriggerGroupTurn(groupId, speaker),
+        () => postGroupMessage(groupId, undefined, speaker),
         'Gagal memicu balasan agen grup',
       );
     },
